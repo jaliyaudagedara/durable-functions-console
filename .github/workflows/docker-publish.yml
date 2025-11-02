@@ -126,9 +126,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Wait for approval
-        run: echo "Waiting for approval"
-
       - name: Log in to Azure
         uses: azure/login@v2
         with:
@@ -149,7 +146,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          TAG_NAME="v${{ needs.build-and-push.outputs.image-tag }}-${{ needs.build-and-push.outputs.timestamp }}"
+          TAG_NAME="v${{ needs.build-and-push.outputs.image-tag }}"
           
           if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
             echo "Tag $TAG_NAME already exists, skipping tag creation"
