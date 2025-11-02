@@ -4,6 +4,8 @@
 @using DfxConsole.BlazorUI.Components.Shared
 @using DfxConsole.BlazorUI.Constants
 @using DfxConsole.BlazorUI.Models
+@using DfxConsole.BlazorUI.Services
+@inject LocalStorageService LocalStorageService
 @inject IJSRuntime JSRuntime
 
 @if (!string.IsNullOrEmpty(Result))
@@ -106,12 +108,11 @@
                                                                 title="View details in popup">
                                                             <span class="bi bi-eye"></span> Details
                                                         </button>
-                                                        <a href="@BuildInstanceDetailViewersUrl(instance.InstanceId)"
-                                                           target="_blank"
-                                                           class="btn btn-sm btn-outline-secondary"
-                                                           title="Open in new tab">
+                                                        <button class="btn btn-sm btn-outline-secondary"
+                                                                @onclick="() => OpenInstanceInNewTab(instance.InstanceId)"
+                                                                title="Open in new tab">
                                                             <span class="bi bi-box-arrow-up-right"></span>
-                                                        </a>
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -136,12 +137,11 @@
                                                                 title="View details in popup">
                                                             <span class="bi bi-eye"></span> Details
                                                         </button>
-                                                        <a href="@BuildEntityDetailUrl(entity.EntityId.Name, entity.EntityId.Key)"
-                                                           target="_blank"
-                                                           class="btn btn-sm btn-outline-secondary"
-                                                           title="Open in new tab">
+                                                        <button class="btn btn-sm btn-outline-secondary"
+                                                                @onclick="() => OpenEntityInNewTab(entity.EntityId.Name, entity.EntityId.Key)"
+                                                                title="Open in new tab">
                                                             <span class="bi bi-box-arrow-up-right"></span>
-                                                        </a>
+                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -231,14 +231,9 @@
                     <button type="button" class="btn-close" @onclick="CloseInstanceDetailViewers"></button>
                 </div>
                 <div class="modal-body">
-                    <InstanceDetailViewer Instance="@_selectedInstance" ShowQuickInfo="true" />
+                    <InstanceDetailViewer @key="@_selectedInstance.InstanceId" Instance="@_selectedInstance" ShowQuickInfo="true" />
                 </div>
                 <div class="modal-footer">
-                    <a href="@BuildInstanceDetailViewersUrl(_selectedInstance.InstanceId)"
-                       target="_blank"
-                       class="btn btn-primary">
-                        <span class="bi bi-box-arrow-up-right"></span> Open in New Tab
-                    </a>
                     <button type="button" class="btn btn-secondary" @onclick="CloseInstanceDetailViewers">Close</button>
                 </div>
             </div>
@@ -260,7 +255,7 @@
                     <button type="button" class="btn-close" @onclick="CloseEntityDetails"></button>
                 </div>
                 <div class="modal-body">
-                    <EntityDetailViewer Entity="@_selectedEntity" ShowQuickInfo="true" />
+                    <EntityDetailViewer @key="@($"{_selectedEntity.EntityId.Name}_{_selectedEntity.EntityId.Key}")" Entity="@_selectedEntity" ShowQuickInfo="true" />
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="CloseEntityDetails">Close</button>
@@ -473,24 +468,30 @@
         _selectedEntity = null;
     }
 
-    private string BuildInstanceDetailViewersUrl(string? instanceId)
+    private async Task OpenInstanceInNewTab(string? instanceId)
     {
         if (string.IsNullOrWhiteSpace(instanceId))
         {
-            return "/instances";
+            return;
         }
 
-        return $"/instances/{Uri.EscapeDataString(instanceId)}?showHistoryOutput=true&returnInternalServerErrorOnFailure=true";
+        await LocalStorageService.SetItemAsync<bool>(StorageKeys.IsHomePageNeedsReload, true);
+
+        var url = $"/instances/{Uri.EscapeDataString(instanceId)}?showHistoryOutput=true&returnInternalServerErrorOnFailure=true";
+        await JSRuntime.InvokeVoidAsync("window.open", url, "_blank");
     }
 
-    private string BuildEntityDetailUrl(string entityName, string entityKey)
+    private async Task OpenEntityInNewTab(string entityName, string entityKey)
     {
         if (string.IsNullOrWhiteSpace(entityName) || string.IsNullOrWhiteSpace(entityKey))
         {
-            return "/entities";
+            return;
         }
 
-        return $"/entities/{Uri.EscapeDataString(entityName)}/{Uri.EscapeDataString(entityKey)}";
+        await LocalStorageService.SetItemAsync<bool>(StorageKeys.IsHomePageNeedsReload, true);
+
+        var url = $"/entities/{Uri.EscapeDataString(entityName)}/{Uri.EscapeDataString(entityKey)}";
+        await JSRuntime.InvokeVoidAsync("window.open", url, "_blank");
     }
 
     private string GetStatusBadgeClass(string status) => status?.ToLower() switch

@@ -118,7 +118,7 @@
 
     @if (_instance != null && !_isLoading)
     {
-        <InstanceDetailViewer Instance="@_instance" ShowQuickInfo="true" />
+        <InstanceDetailViewer @key="@_instance.InstanceId" Instance="@_instance" ShowQuickInfo="true" />
     }
 </div>
 
@@ -237,7 +237,9 @@
 
         _validationError = false;
         _hasLoaded = false;
-        NavigationManager.NavigateTo($"/instances/{Uri.EscapeDataString(_inputInstanceId)}{BuildQueryString()}");
+        
+        // FORCE FULL PAGE RELOAD - this will completely reinitialize everything including Monaco
+        NavigationManager.NavigateTo($"/instances/{Uri.EscapeDataString(_inputInstanceId)}{BuildQueryString()}", forceLoad: true);
     }
 
     private async Task LoadInstanceAsync()
