@@ -1,0 +1,92 @@
+@using DfxConsole.BlazorUI.Models
+
+<div class="mb-3">
+    <label class="form-label">Instance ID <span class="text-danger">*</span></label>
+    <input type="text" 
+           class="form-control @(ValidationError && string.IsNullOrWhiteSpace(InstanceId) ? "is-invalid" : "")" 
+           value="@InstanceId"
+           @oninput="@(e => OnInstanceIdChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty))"
+           placeholder="Enter instance ID" />
+    @if (ValidationError && string.IsNullOrWhiteSpace(InstanceId))
+    {
+        <div class="invalid-feedback d-block">Instance ID is required.</div>
+    }
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-3">
+        <div class="form-check">
+            <input class="form-check-input" 
+                   type="checkbox" 
+                   id="@($"showHistory_{UniqueId}")" 
+                   checked="@ShowHistory"
+                   @onchange="@(e => OnShowHistoryChanged.InvokeAsync(bool.Parse(e.Value?.ToString() ?? "false")))" />
+            <label class="form-check-label" for="@($"showHistory_{UniqueId}")">Show History</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" 
+                   type="checkbox" 
+                   id="@($"showHistoryOutput_{UniqueId}")" 
+                   checked="@ShowHistoryOutput"
+                   @onchange="@(e => OnShowHistoryOutputChanged.InvokeAsync(bool.Parse(e.Value?.ToString() ?? "false")))" />
+            <label class="form-check-label" for="@($"showHistoryOutput_{UniqueId}")">Show History Output</label>
+        </div>
+    </div>
+    <div class="col-md-6 mb-3">
+        <div class="form-check">
+            <input class="form-check-input" 
+                   type="checkbox" 
+                   id="@($"showInput_{UniqueId}")" 
+                   checked="@ShowInput"
+                   @onchange="@(e => OnShowInputChanged.InvokeAsync(bool.Parse(e.Value?.ToString() ?? "false")))" />
+            <label class="form-check-label" for="@($"showInput_{UniqueId}")">Show Input</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" 
+                   type="checkbox" 
+                   id="@($"returnError_{UniqueId}")" 
+                   checked="@ReturnInternalServerErrorOnFailure"
+                   @onchange="@(e => OnReturnInternalServerErrorOnFailureChanged.InvokeAsync(bool.Parse(e.Value?.ToString() ?? "false")))" />
+            <label class="form-check-label" for="@($"returnError_{UniqueId}")">
+                Return Internal Server Error On Failure
+            </label>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string InstanceId { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> OnInstanceIdChanged { get; set; }
+
+    [Parameter]
+    public bool ValidationError { get; set; } = false;
+
+    [Parameter]
+    public bool ShowHistory { get; set; } = true;
+
+    [Parameter]
+    public EventCallback<bool> OnShowHistoryChanged { get; set; }
+
+    [Parameter]
+    public bool ShowHistoryOutput { get; set; } = false;
+
+    [Parameter]
+    public EventCallback<bool> OnShowHistoryOutputChanged { get; set; }
+
+    [Parameter]
+    public bool ShowInput { get; set; } = true;
+
+    [Parameter]
+    public EventCallback<bool> OnShowInputChanged { get; set; }
+
+    [Parameter]
+    public bool ReturnInternalServerErrorOnFailure { get; set; } = false;
+
+    [Parameter]
+    public EventCallback<bool> OnReturnInternalServerErrorOnFailureChanged { get; set; }
+
+    private string UniqueId { get; set; } = Guid.NewGuid().ToString("N");
+}

@@ -1,0 +1,293 @@
+@page "/instances/{instanceId?}"
+@page "/instances"
+@using System.Text.Json
+@using DfxConsole.BlazorUI.Components.Constants
+@using DfxConsole.BlazorUI.Components.Pages.Features
+@using DfxConsole.BlazorUI.Constants
+@using DfxConsole.BlazorUI.Models
+@using DfxConsole.BlazorUI.Services
+@using DfxConsole.BlazorUI.Components.Shared
+
+@inject DurableFunctionService DurableFunctionService
+@inject LocalStorageService LocalStorageService
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>Durable Functions Console</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-info-circle-fill me-2"></i>Instance Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (!_configurationLoaded)
+                    {
+                        <div class="card shadow-sm">
+                            <div class="card-body p-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="spinner-border text-primary me-3" role="status" style="width: 2rem; height: 2rem;">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1 fw-semibold">Loading Configuration</h6>
+                                        <p class="mb-0 text-muted small">Please wait while we load your settings...</p>
+                                    </div>
+                                </div>
+                                <div class="progress mt-3" style="height: 4px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                                         role="progressbar" 
+                                         style="width: 100%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else if (!IsConfigValid())
+                    {
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            No configuration found. Please configure the application from the home page.
+                        </div>
+                    }
+                    else
+                    {
+                        <GetInstanceParametersViewer InstanceId="@_inputInstanceId"
+                                                     OnInstanceIdChanged="@HandleInstanceIdChanged"
+                                                     ValidationError="@_validationError"
+                                                     ShowHistory="@_showHistory"
+                                                     OnShowHistoryChanged="@(value => UpdateParameter(ref _showHistory, value))"
+                                                     ShowHistoryOutput="@_showHistoryOutput"
+                                                     OnShowHistoryOutputChanged="@(value => UpdateParameter(ref _showHistoryOutput, value))"
+                                                     ShowInput="@_showInput"
+                                                     OnShowInputChanged="@(value => UpdateParameter(ref _showInput, value))"
+                                                     ReturnInternalServerErrorOnFailure="@_returnInternalServerErrorOnFailure"
+                                                     OnReturnInternalServerErrorOnFailureChanged="@(value => UpdateParameter(ref _returnInternalServerErrorOnFailure, value))" />
+
+                        <div class="mt-3">
+                            <button class="btn btn-primary" @onclick="ExecuteLoadInstance" disabled="@(!IsConfigValid() || _isLoading)">
+                                Execute
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border text-primary me-3" role="status" style="width: 2rem; height: 2rem;">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1 fw-semibold">Loading Instance Details</h6>
+                                <p class="mb-0 text-muted small">Please wait while we retrieve the instance information...</p>
+                            </div>
+                        </div>
+                        <div class="progress mt-3" style="height: 4px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                                 role="progressbar" 
+                                 style="width: 100%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_error != null)
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="alert alert-danger alert-dismissible fade show">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>@_error
+                    <button type="button" class="btn-close" @onclick="@(() => _error = null)"></button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_instance != null && !_isLoading)
+    {
+        <InstanceDetailViewer Instance="@_instance" ShowQuickInfo="true" />
+    }
+</div>
+
+<style>
+    .progress-bar-animated {
+        animation: progress-bar-stripes 1s linear infinite;
+    }
+
+    @@keyframes progress-bar-stripes {
+        0% {
+            background-position: 1rem 0;
+        }
+        100% {
+            background-position: 0 0;
+        }
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string? InstanceId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "showHistory")]
+    public bool? ShowHistoryParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "showHistoryOutput")]
+    public bool? ShowHistoryOutputParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "showInput")]
+    public bool? ShowInputParam { get; set; }
+
+    [SupplyParameterFromQuery(Name = "returnInternalServerErrorOnFailure")]
+    public bool? ReturnInternalServerErrorOnFailureParam { get; set; }
+
+    private DurableFunctionConfiguration _configuration = new();
+    private InstanceInfo? _instance;
+    private bool _isLoading;
+    private string? _error;
+    private string _inputInstanceId = string.Empty;
+    private bool _validationError;
+    private bool _hasLoaded;
+    private bool _configurationLoaded;
+
+    private bool _showHistory = true;
+    private bool _showHistoryOutput;
+    private bool _showInput = true;
+    private bool _returnInternalServerErrorOnFailure;
+
+    protected override void OnParametersSet()
+    {
+        _showHistory = ShowHistoryParam ?? true;
+        _showHistoryOutput = ShowHistoryOutputParam ?? false;
+        _showInput = ShowInputParam ?? true;
+        _returnInternalServerErrorOnFailure = ReturnInternalServerErrorOnFailureParam ?? false;
+        _inputInstanceId = InstanceId ?? string.Empty;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadConfiguration();
+        }
+
+        if (!_hasLoaded && !string.IsNullOrWhiteSpace(InstanceId) && IsConfigValid())
+        {
+            _hasLoaded = true;
+            await LoadInstanceAsync();
+        }
+    }
+
+    private async Task LoadConfiguration()
+    {
+        try
+        {
+            var savedConfig = await LocalStorageService.GetItemAsync<DurableFunctionConfiguration>(StorageKeys.DurableFunctionConfiguration);
+            _configuration = savedConfig ?? new DurableFunctionConfiguration();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error loading configuration: {ex.Message}";
+        }
+        finally
+        {
+            _configurationLoaded = true;
+            StateHasChanged();
+        }
+    }
+
+    private bool IsConfigValid() =>
+        !string.IsNullOrWhiteSpace(_configuration.FunctionAppUrl) &&
+        !string.IsNullOrWhiteSpace(_configuration.AuthCode);
+
+    private Task HandleInstanceIdChanged(string value)
+    {
+        _inputInstanceId = value;
+        _validationError = false;
+        return Task.CompletedTask;
+    }
+
+    private Task UpdateParameter(ref bool field, bool value)
+    {
+        field = value;
+        return Task.CompletedTask;
+    }
+
+    private void ExecuteLoadInstance()
+    {
+        if (string.IsNullOrWhiteSpace(_inputInstanceId))
+        {
+            _validationError = true;
+            return;
+        }
+
+        if (_isLoading) return;
+
+        _validationError = false;
+        _hasLoaded = false;
+        NavigationManager.NavigateTo($"/instances/{Uri.EscapeDataString(_inputInstanceId)}{BuildQueryString()}");
+    }
+
+    private async Task LoadInstanceAsync()
+    {
+        if (_isLoading) return;
+
+        _isLoading = true;
+        _error = null;
+        _instance = null;
+        StateHasChanged();
+
+        try
+        {
+            _instance = await DurableFunctionService.GetInstanceAsync(
+                _configuration,
+                _inputInstanceId,
+                _showHistory,
+                _showHistoryOutput,
+                _showInput,
+                _returnInternalServerErrorOnFailure);
+
+            if (_instance == null)
+            {
+                _error = "Instance not found or no data returned";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error loading instance: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private string BuildQueryString()
+    {
+        var queryParams = new List<string>();
+
+        if (!_showHistory)
+            queryParams.Add("showHistory=false");
+        if (_showHistoryOutput)
+            queryParams.Add("showHistoryOutput=true");
+        if (!_showInput)
+            queryParams.Add("showInput=false");
+        if (_returnInternalServerErrorOnFailure)
+            queryParams.Add("returnInternalServerErrorOnFailure=true");
+
+        return queryParams.Count > 0 ? "?" + string.Join("&", queryParams) : string.Empty;
+    }
+}

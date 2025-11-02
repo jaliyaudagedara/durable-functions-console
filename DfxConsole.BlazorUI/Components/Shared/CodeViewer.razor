@@ -1,0 +1,177 @@
+@inject IJSRuntime JSRuntime
+
+<div class="card shadow-sm">
+    <div class="card-header @HeaderClass">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                @if (!string.IsNullOrEmpty(Icon))
+                {
+                    <i class="bi bi-@Icon me-2"></i>
+                }
+                JSON
+            </h5>
+            <div class="d-flex gap-2">
+                @AdditionalHeaderContent
+                @if (ShowCopyButton)
+                {
+                    <button class="btn btn-sm btn-outline-primary" @onclick="CopyToClipboard" disabled="@_isCopying">
+                        <span class="bi bi-clipboard@(_copySuccess ? "-check" : "")"></span>
+                        @if (_isCopying)
+                        {
+                            <text>Copying...</text>
+                        }
+                        else if (_copySuccess)
+                        {
+                            <text>Copied!</text>
+                        }
+                        else
+                        {
+                            <text>Copy</text>
+                        }
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="code-viewer-container" style="@GetContainerStyle()">
+            <pre class="m-0"><code class="@LanguageClass">@Content</code></pre>
+        </div>
+    </div>
+</div>
+
+<style>
+    .code-viewer-container {
+        overflow: auto;
+        background-color: #1e1e1e;
+        max-width: 100%;
+        position: relative;
+    }
+
+    .code-viewer-container pre {
+        background-color: #1e1e1e;
+        color: #d4d4d4;
+        padding: 12px;
+        margin: 0;
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+
+    .code-viewer-container code {
+        background-color: transparent;
+        color: inherit;
+        padding: 0;
+    }
+
+    @@media (max-width: 991.98px) {
+        .code-viewer-container {
+            max-height: 500px;
+        }
+    }
+</style>
+
+@code {
+    /// <summary>
+    /// The content to display in the code viewer
+    /// </summary>
+    [Parameter, EditorRequired]
+    public string Content { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Bootstrap icon name (without 'bi-' prefix)
+    /// </summary>
+    [Parameter]
+    public string Icon { get; set; } = "file-earmark-code";
+
+    /// <summary>
+    /// CSS class for the card header (e.g., "bg-info text-white")
+    /// </summary>
+    [Parameter]
+    public string HeaderClass { get; set; } = "";
+
+    /// <summary>
+    /// Language class for syntax highlighting (e.g., "language-json", "language-csharp")
+    /// </summary>
+    [Parameter]
+    public string LanguageClass { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether to show the copy to clipboard button
+    /// </summary>
+    [Parameter]
+    public bool ShowCopyButton { get; set; } = true;
+
+    /// <summary>
+    /// Maximum height of the code container (e.g., "500px", "calc(100vh - 400px)")
+    /// </summary>
+    [Parameter]
+    public string MaxHeight { get; set; } = "calc(100vh - 400px)";
+
+    /// <summary>
+    /// Minimum height of the code container
+    /// </summary>
+    [Parameter]
+    public string MinHeight { get; set; } = "300px";
+
+    /// <summary>
+    /// Additional content to render in the header (e.g., buttons, badges)
+    /// </summary>
+    [Parameter]
+    public RenderFragment? AdditionalHeaderContent { get; set; }
+
+    /// <summary>
+    /// Event callback triggered when copy operation completes successfully
+    /// </summary>
+    [Parameter]
+    public EventCallback<bool> OnCopyComplete { get; set; }
+
+    private bool _isCopying = false;
+    private bool _copySuccess = false;
+
+    private async Task CopyToClipboard()
+    {
+        if (string.IsNullOrEmpty(Content))
+        {
+            return;
+        }
+
+        _isCopying = true;
+        _copySuccess = false;
+        StateHasChanged();
+
+        try
+        {
+            var success = await JSRuntime.InvokeAsync<bool>("clipboardInterop.copyToClipboard", Content);
+            _copySuccess = success;
+
+            if (success)
+            {
+                await OnCopyComplete.InvokeAsync(true);
+
+                _ = Task.Delay(2000).ContinueWith(_ =>
+                {
+                    _copySuccess = false;
+                    InvokeAsync(StateHasChanged);
+                });
+            }
+        }
+        catch (Exception)
+        {
+            _copySuccess = false;
+            await OnCopyComplete.InvokeAsync(false);
+        }
+        finally
+        {
+            _isCopying = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetContainerStyle()
+    {
+        return $"max-height: {MaxHeight}; min-height: {MinHeight};";
+    }
+}

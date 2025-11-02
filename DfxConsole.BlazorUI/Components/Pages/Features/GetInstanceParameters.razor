@@ -1,0 +1,56 @@
+@using DfxConsole.BlazorUI.Components.Pages.Features
+@using DfxConsole.BlazorUI.Components.Shared
+
+<GetInstanceParametersViewer 
+    InstanceId="@_instanceId"
+    OnInstanceIdChanged="@((value) => { _instanceId = value; _validationError = false; return Task.CompletedTask; })"
+    ValidationError="@_validationError"
+    ShowHistory="@_showHistory"
+    OnShowHistoryChanged="@((value) => { _showHistory = value; return Task.CompletedTask; })"
+    ShowHistoryOutput="@_showHistoryOutput"
+    OnShowHistoryOutputChanged="@((value) => { _showHistoryOutput = value; return Task.CompletedTask; })"
+    ShowInput="@_showInput"
+    OnShowInputChanged="@((value) => { _showInput = value; return Task.CompletedTask; })"
+    ReturnInternalServerErrorOnFailure="@_returnInternalServerErrorOnFailure"
+    OnReturnInternalServerErrorOnFailureChanged="@((value) => { _returnInternalServerErrorOnFailure = value; return Task.CompletedTask; })" />
+
+<div class="mt-3">
+    <button class="btn btn-primary" @onclick="Execute" disabled="@(!IsConfigValid)">Execute</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public EventCallback<GetInstanceParams> OnExecute { get; set; }
+    [Parameter] public bool IsConfigValid { get; set; } = false;
+
+    private string _instanceId = string.Empty;
+    private bool _showHistory = true;
+    private bool _showHistoryOutput = false;
+    private bool _showInput = true;
+    private bool _returnInternalServerErrorOnFailure = false;
+    private bool _validationError = false;
+
+    private async Task Execute()
+    {
+        _validationError = false;
+        
+        if (string.IsNullOrWhiteSpace(_instanceId))
+        {
+            _validationError = true;
+            return;
+        }
+
+        await OnExecute.InvokeAsync(new GetInstanceParams(
+            _instanceId,
+            _showHistory,
+            _showHistoryOutput,
+            _showInput,
+            _returnInternalServerErrorOnFailure));
+    }
+
+    public record GetInstanceParams(
+        string InstanceId,
+        bool ShowHistory,
+        bool ShowHistoryOutput,
+        bool ShowInput,
+        bool ReturnInternalServerErrorOnFailure);
+}

@@ -1,0 +1,47 @@
+<div class="mb-3">
+    <label class="form-label">Entity Name <span class="text-danger">*</span></label>
+    <input type="text" class="form-control @(_validationError && string.IsNullOrWhiteSpace(_entityName) ? "is-invalid" : "")" 
+           @bind="_entityName" 
+           @bind:event="oninput"
+           placeholder="Enter entity name" />
+    @if (_validationError && string.IsNullOrWhiteSpace(_entityName))
+    {
+        <div class="invalid-feedback d-block">Entity name is required.</div>
+    }
+</div>
+<div class="mb-3">
+    <label class="form-label">Entity Key <span class="text-danger">*</span></label>
+    <input type="text" class="form-control @(_validationError && string.IsNullOrWhiteSpace(_entityKey) ? "is-invalid" : "")" 
+           @bind="_entityKey" 
+           @bind:event="oninput"
+           placeholder="Enter entity key" />
+    @if (_validationError && string.IsNullOrWhiteSpace(_entityKey))
+    {
+        <div class="invalid-feedback d-block">Entity key is required.</div>
+    }
+</div>
+<button class="btn btn-primary" @onclick="Execute" disabled="@(!IsConfigValid)">Execute</button>
+
+@code {
+    [Parameter, EditorRequired] public EventCallback<GetEntityParams> OnExecute { get; set; }
+    [Parameter] public bool IsConfigValid { get; set; } = false;
+
+    private string _entityName = string.Empty;
+    private string _entityKey = string.Empty;
+    private bool _validationError = false;
+
+    private async Task Execute()
+    {
+        _validationError = false;
+        
+        if (string.IsNullOrWhiteSpace(_entityName) || string.IsNullOrWhiteSpace(_entityKey))
+        {
+            _validationError = true;
+            return;
+        }
+
+        await OnExecute.InvokeAsync(new GetEntityParams(_entityName, _entityKey));
+    }
+
+    public record GetEntityParams(string EntityName, string EntityKey);
+}

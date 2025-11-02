@@ -1,0 +1,111 @@
+﻿@using System.Text.Json
+@using DfxConsole.BlazorUI.Constants
+@using DfxConsole.BlazorUI.Models
+@using DfxConsole.BlazorUI.Components.Shared
+
+@if (ShowQuickInfo)
+{
+    <div class="row mt-3">
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body p-2">
+                    <h6 class="card-subtitle mb-2 fw-semibold" style="font-size: var(--font-size-sm); color: var(--text-primary);">Instance ID</h6>
+                    <p class="card-text mb-0" style="font-size: var(--font-size-base); word-break: break-all;" title="@_instance.InstanceId">@_instance.InstanceId</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body p-2">
+                    <h6 class="card-subtitle mb-2 fw-semibold" style="font-size: var(--font-size-sm); color: var(--text-primary);">Name</h6>
+                    <p class="card-text mb-0" style="font-size: var(--font-size-base); word-break: break-word;" title="@(_instance.Name ?? "N/A")">@(_instance.Name ?? "N/A")</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body p-2">
+                    <h6 class="card-subtitle mb-2 fw-semibold" style="font-size: var(--font-size-sm); color: var(--text-primary);">Status</h6>
+                    <p class="card-text mb-0">
+                        <span class="badge @GetStatusBadgeClass(_instance.RuntimeStatus)">
+                            @_instance.RuntimeStatus
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body p-2">
+                    <h6 class="card-subtitle mb-2 fw-semibold" style="font-size: var(--font-size-sm); color: var(--text-primary);">Created</h6>
+                    <p class="card-text mb-0" style="font-size: var(--font-size-base);">@FormatDateTime(_instance.CreatedTime)</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_instance != null)
+{
+    <div class="row">
+        <div class="col-12">
+            <CodeViewer 
+                Content="@_jsonResult"
+                Icon="file-earmark-code"
+                HeaderClass=""
+                LanguageClass="language-json"
+                MaxHeight="calc(100vh - 400px)"
+                MinHeight="300px" />
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public InstanceInfo? Instance { get; set; }
+
+    [Parameter]
+    public bool ShowQuickInfo { get; set; } = true;
+
+    private InstanceInfo? _instance;
+    private string _jsonResult = string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        _instance = Instance;
+        
+        if (_instance != null)
+        {
+            _jsonResult = JsonSerializer.Serialize(_instance, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+        }
+    }
+
+    private string GetStatusBadgeClass(string? status) => status?.ToLower() switch
+    {
+        var s when s == RuntimeStatus.Running.ToLower() || s == RuntimeStatus.Pending.ToLower() => "bg-primary",
+        var s when s == RuntimeStatus.Completed.ToLower() => "bg-success",
+        var s when s == RuntimeStatus.Failed.ToLower() => "bg-danger",
+        var s when s == RuntimeStatus.Terminated.ToLower() => "bg-warning",
+        var s when s == RuntimeStatus.Canceled.ToLower() => "bg-secondary",
+        _ => "bg-secondary"
+    };
+
+    private string FormatDateTime(string? dateTime)
+    {
+        if (string.IsNullOrEmpty(dateTime))
+        {
+            return "N/A";
+        }
+
+        if (DateTime.TryParse(dateTime, out var dt))
+        {
+            return dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+        }
+
+        return dateTime;
+    }
+}

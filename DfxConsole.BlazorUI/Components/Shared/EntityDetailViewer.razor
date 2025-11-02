@@ -1,0 +1,203 @@
+@using System.Text.Json
+@using DfxConsole.BlazorUI.Models
+@using DfxConsole.BlazorUI.Components.Shared
+@inject NavigationManager NavigationManager
+
+@if (ShowQuickInfo)
+{
+    <div class="row mt-3">
+        <div class="col-md-4 col-sm-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body p-2">
+                    <h6 class="card-subtitle mb-2 fw-semibold" style="font-size: var(--font-size-sm); color: var(--text-primary);">Entity Name</h6>
+                    <p class="card-text mb-0" style="font-size: var(--font-size-base); word-break: break-word;" title="@GetEntityName()">@GetEntityName()</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-sm-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body p-2">
+                    <h6 class="card-subtitle mb-2 fw-semibold" style="font-size: var(--font-size-sm); color: var(--text-primary);">Entity Key</h6>
+                    <p class="card-text mb-0" style="font-size: var(--font-size-base); word-break: break-all;" title="@GetEntityKey()">@GetEntityKey()</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-sm-6 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body p-2">
+                    <h6 class="card-subtitle mb-2 fw-semibold" style="font-size: var(--font-size-sm); color: var(--text-primary);">Last Operation Time</h6>
+                    <p class="card-text mb-0" style="font-size: var(--font-size-base);">@GetLastOperationTime()</p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(_jsonContent))
+{
+    <div class="row">
+        <div class="col-12">
+            <CodeViewer 
+                Content="@_jsonContent"
+                Icon="file-earmark-code"
+                HeaderClass=""
+                LanguageClass="language-json"
+                MaxHeight="calc(100vh - 400px)"
+                MinHeight="300px" />
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public EntityInfo? Entity { get; set; }
+
+    [Parameter]
+    public string? JsonContent { get; set; }
+
+    [Parameter]
+    public bool ShowQuickInfo { get; set; } = true;
+
+    private string _jsonContent = string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        // Priority: Use JsonContent if provided, otherwise serialize Entity
+        if (!string.IsNullOrEmpty(JsonContent))
+        {
+            _jsonContent = JsonContent;
+        }
+        else if (Entity != null)
+        {
+            _jsonContent = JsonSerializer.Serialize(Entity, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+        }
+        else
+        {
+            _jsonContent = string.Empty;
+        }
+    }
+
+    private string GetEntityName()
+    {
+        if (Entity != null)
+        {
+            return Entity.EntityId?.Name ?? "N/A";
+        }
+
+        // Try to get from current url
+        // Example URL: .../entities/{entityName}/{entityKey}
+        var uri = new Uri(NavigationManager.Uri);
+        var segments = uri.Segments.Select(s => s.Trim('/')).Where(s => !string.IsNullOrEmpty(s)).ToArray();
+        var entityIndex = Array.IndexOf(segments, "entities");
+        if (entityIndex >= 0 && entityIndex + 1 < segments.Length)
+        {
+            return segments[entityIndex + 1];
+        }
+
+        if (!string.IsNullOrEmpty(JsonContent))
+        {
+            try
+            {
+                var jsonDoc = JsonDocument.Parse(JsonContent);
+                if (jsonDoc.RootElement.TryGetProperty("entityId", out var entityId) &&
+                    entityId.TryGetProperty("name", out var name))
+                {
+                    return name.GetString() ?? "N/A";
+                }
+            }
+            catch
+            {
+                // Ignore parsing errors
+            }
+        }
+
+        return "N/A";
+    }
+
+    private string GetEntityKey()
+    {
+        if (Entity != null)
+        {
+            return Entity.EntityId?.Key ?? "N/A";
+        }
+
+        // Try to get from current url
+        // Example URL: .../entities/{entityName}/{entityKey}
+        var uri = new Uri(NavigationManager.Uri);
+        var segments = uri.Segments.Select(s => s.Trim('/')).Where(s => !string.IsNullOrEmpty(s)).ToArray();
+        var entityIndex = Array.IndexOf(segments, "entities");
+        if (entityIndex >= 0 && entityIndex + 2 < segments.Length)
+        {
+            return segments[entityIndex + 2];
+        }
+
+        if (!string.IsNullOrEmpty(JsonContent))
+        {
+            try
+            {
+                var jsonDoc = JsonDocument.Parse(JsonContent);
+                if (jsonDoc.RootElement.TryGetProperty("entityId", out var entityId) &&
+                    entityId.TryGetProperty("key", out var key))
+                {
+                    return key.GetString() ?? "N/A";
+                }
+            }
+            catch
+            {
+                // Ignore parsing errors
+            }
+        }
+
+        return "N/A";
+    }
+
+    private string GetLastOperationTime()
+    {
+        string? dateTime = null;
+
+        if (Entity != null)
+        {
+            dateTime = Entity.LastOperationTime;
+        }
+        else if (!string.IsNullOrEmpty(JsonContent))
+        {
+            try
+            {
+                var jsonDoc = JsonDocument.Parse(JsonContent);
+                if (jsonDoc.RootElement.TryGetProperty("lastOperationTime", out var lastOpTime))
+                {
+                    dateTime = lastOpTime.GetString();
+                }
+                else if (jsonDoc.RootElement.TryGetProperty("lastModifiedTime", out var lastModTime))
+                {
+                    dateTime = lastModTime.GetString();
+                }
+            }
+            catch
+            {
+                // Ignore parsing errors
+            }
+        }
+
+        return FormatDateTime(dateTime);
+    }
+
+    private string FormatDateTime(string? dateTime)
+    {
+        if (string.IsNullOrEmpty(dateTime))
+        {
+            return "N/A";
+        }
+
+        if (DateTime.TryParse(dateTime, out var dt))
+        {
+            return dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+        }
+
+        return dateTime;
+    }
+}

@@ -1,0 +1,34 @@
+<div class="mb-3">
+    <label class="form-label">Instance ID <span class="text-danger">*</span></label>
+    <input type="text" 
+           class="form-control @(_validationError && string.IsNullOrWhiteSpace(_instanceId) ? "is-invalid" : "")" 
+           @bind="_instanceId"
+           @bind:event="oninput"
+           placeholder="Enter instance ID" />
+    @if (_validationError && string.IsNullOrWhiteSpace(_instanceId))
+    {
+        <div class="invalid-feedback d-block">Instance ID is required.</div>
+    }
+</div>
+<button class="btn btn-danger" @onclick="Execute" disabled="@(!IsConfigValid)">Execute</button>
+
+@code {
+    [Parameter] public EventCallback<string> OnExecute { get; set; }
+    [Parameter] public bool IsConfigValid { get; set; } = false;
+
+    private string _instanceId = string.Empty;
+    private bool _validationError = false;
+
+    private async Task Execute()
+    {
+        _validationError = false;
+
+        if (string.IsNullOrWhiteSpace(_instanceId))
+        {
+            _validationError = true;
+            return;
+        }
+
+        await OnExecute.InvokeAsync(_instanceId);
+    }
+}

@@ -1,0 +1,44 @@
+<div class="mb-3">
+    <label class="form-label">Instance ID <span class="text-danger">*</span></label>
+    <input type="text" 
+           class="form-control @(_validationError && string.IsNullOrWhiteSpace(_instanceId) ? "is-invalid" : "")" 
+           @bind="_instanceId"
+           @bind:event="oninput"
+           placeholder="Enter instance ID" />
+    @if (_validationError && string.IsNullOrWhiteSpace(_instanceId))
+    {
+        <div class="invalid-feedback d-block">Instance ID is required.</div>
+    }
+</div>
+<div class="mb-3">
+    <label class="form-label">Reason (Optional)</label>
+    <input type="text" 
+           class="form-control" 
+           @bind="_reason"
+           placeholder="Enter reason for resuming" />
+</div>
+<button class="btn btn-success" @onclick="Execute" disabled="@(!IsConfigValid)">Execute</button>
+
+@code {
+    [Parameter] public EventCallback<InstanceWithReasonParams> OnExecute { get; set; }
+    [Parameter] public bool IsConfigValid { get; set; } = false;
+
+    private string _instanceId = string.Empty;
+    private string _reason = string.Empty;
+    private bool _validationError = false;
+
+    private async Task Execute()
+    {
+        _validationError = false;
+
+        if (string.IsNullOrWhiteSpace(_instanceId))
+        {
+            _validationError = true;
+            return;
+        }
+
+        await OnExecute.InvokeAsync(new InstanceWithReasonParams(_instanceId, _reason));
+    }
+
+    public record InstanceWithReasonParams(string InstanceId, string? Reason);
+}

@@ -1,0 +1,261 @@
+@page "/entities/{entityName}/{entityKey}"
+@page "/entities"
+@using System.Text.Json
+@using DfxConsole.BlazorUI.Components.Constants
+@using DfxConsole.BlazorUI.Constants
+@using DfxConsole.BlazorUI.Models
+@using DfxConsole.BlazorUI.Services
+@using DfxConsole.BlazorUI.Components.Shared
+
+@inject DurableFunctionService DurableFunctionService
+@inject LocalStorageService LocalStorageService
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>Entity Details - Durable Functions Console</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-box-fill me-2"></i>Entity Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (!_configurationLoaded)
+                    {
+                        <div class="card shadow-sm">
+                            <div class="card-body p-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="spinner-border text-primary me-3" role="status" style="width: 2rem; height: 2rem;">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1 fw-semibold">Loading Configuration</h6>
+                                        <p class="mb-0 text-muted small">Please wait while we load your settings...</p>
+                                    </div>
+                                </div>
+                                <div class="progress mt-3" style="height: 4px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                                         role="progressbar" 
+                                         style="width: 100%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else if (!IsConfigValid())
+                    {
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            No configuration found. Please configure the application from the home page.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Entity Name <span class="text-danger">*</span></label>
+                            <input type="text" 
+                                   class="form-control @(_validationError && string.IsNullOrWhiteSpace(_inputEntityName) ? "is-invalid" : "")" 
+                                   value="@_inputEntityName" 
+                                   @oninput="@((e) => { _inputEntityName = e.Value?.ToString() ?? string.Empty; _validationError = false; })"
+                                   placeholder="Enter entity name" />
+                            @if (_validationError && string.IsNullOrWhiteSpace(_inputEntityName))
+                            {
+                                <div class="invalid-feedback d-block">Entity name is required.</div>
+                            }
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Entity Key <span class="text-danger">*</span></label>
+                            <input type="text" 
+                                   class="form-control @(_validationError && string.IsNullOrWhiteSpace(_inputEntityKey) ? "is-invalid" : "")" 
+                                   value="@_inputEntityKey" 
+                                   @oninput="@((e) => { _inputEntityKey = e.Value?.ToString() ?? string.Empty; _validationError = false; })"
+                                   placeholder="Enter entity key" />
+                            @if (_validationError && string.IsNullOrWhiteSpace(_inputEntityKey))
+                            {
+                                <div class="invalid-feedback d-block">Entity key is required.</div>
+                            }
+                        </div>
+
+                        <div class="mt-3">
+                            <button class="btn btn-primary" @onclick="ExecuteLoadEntity" disabled="@(!IsConfigValid() || _isLoading)">
+                                Execute
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body p-3">
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border text-primary me-3" role="status" style="width: 2rem; height: 2rem;">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1 fw-semibold">Loading Entity Details</h6>
+                                <p class="mb-0 text-muted small">Please wait while we retrieve the entity information...</p>
+                            </div>
+                        </div>
+                        <div class="progress mt-3" style="height: 4px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                                 role="progressbar" 
+                                 style="width: 100%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_error != null)
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="alert alert-danger alert-dismissible fade show">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>@_error
+                    <button type="button" class="btn-close" @onclick="@(() => _error = null)"></button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_entityJsonResult) && !_isLoading)
+    {
+        <EntityDetailViewer JsonContent="@_entityJsonResult" ShowQuickInfo="true" />
+    }
+</div>
+
+<style>
+    .progress-bar-animated {
+        animation: progress-bar-stripes 1s linear infinite;
+    }
+
+    @@keyframes progress-bar-stripes {
+        0% {
+            background-position: 1rem 0;
+        }
+        100% {
+            background-position: 0 0;
+        }
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string? EntityName { get; set; }
+
+    [Parameter]
+    public string? EntityKey { get; set; }
+
+    private DurableFunctionConfiguration _configuration = new();
+    private string _entityJsonResult = string.Empty;
+    private bool _isLoading;
+    private string? _error;
+    private string _inputEntityName = string.Empty;
+    private string _inputEntityKey = string.Empty;
+    private bool _validationError;
+    private bool _hasLoaded;
+    private bool _configurationLoaded;
+
+    protected override void OnParametersSet()
+    {
+        _inputEntityName = EntityName ?? string.Empty;
+        _inputEntityKey = EntityKey ?? string.Empty;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadConfiguration();
+        }
+
+        if (!_hasLoaded && !string.IsNullOrWhiteSpace(EntityName) && !string.IsNullOrWhiteSpace(EntityKey) && IsConfigValid())
+        {
+            _hasLoaded = true;
+            await LoadEntityAsync();
+        }
+    }
+
+    private async Task LoadConfiguration()
+    {
+        try
+        {
+            var savedConfig = await LocalStorageService.GetItemAsync<DurableFunctionConfiguration>(StorageKeys.DurableFunctionConfiguration);
+            _configuration = savedConfig ?? new DurableFunctionConfiguration();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error loading configuration: {ex.Message}";
+        }
+        finally
+        {
+            _configurationLoaded = true;
+            StateHasChanged();
+        }
+    }
+
+    private bool IsConfigValid() =>
+        !string.IsNullOrWhiteSpace(_configuration.FunctionAppUrl) &&
+        !string.IsNullOrWhiteSpace(_configuration.AuthCode);
+
+    private void ExecuteLoadEntity()
+    {
+        if (string.IsNullOrWhiteSpace(_inputEntityName) || string.IsNullOrWhiteSpace(_inputEntityKey))
+        {
+            _validationError = true;
+            return;
+        }
+
+        if (_isLoading) return;
+
+        _validationError = false;
+        _hasLoaded = false;
+        NavigationManager.NavigateTo($"/entities/{Uri.EscapeDataString(_inputEntityName)}/{Uri.EscapeDataString(_inputEntityKey)}");
+    }
+
+    private async Task LoadEntityAsync()
+    {
+        if (_isLoading) return;
+
+        _isLoading = true;
+        _error = null;
+        _entityJsonResult = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            _entityJsonResult = await DurableFunctionService.GetEntityAsync(
+                _configuration,
+                _inputEntityName,
+                _inputEntityKey);
+
+            if (string.IsNullOrEmpty(_entityJsonResult))
+            {
+                _error = "Entity not found or no data returned";
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            _error = $"HTTP Error: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error loading entity: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+}
