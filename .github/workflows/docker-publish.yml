@@ -41,10 +41,12 @@ jobs:
         run: |
           BASE_VERSION=${{ steps.read_version.outputs.VERSION }}
           SHORT_SHA=$(git rev-parse --short HEAD)
+          TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
           
           echo "VERSION=$BASE_VERSION" >> $GITHUB_OUTPUT
           echo "FULL_VERSION=$BASE_VERSION-$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -84,6 +86,7 @@ jobs:
 
     outputs:
       image-tag: ${{ steps.semver.outputs.FULL_VERSION }}
+      timestamp: ${{ steps.semver.outputs.TIMESTAMP }}
 
   deploy-dev:
     needs: build-and-push
@@ -114,8 +117,18 @@ jobs:
     environment:
       name: production
       url: ${{ steps.deploy.outputs.webapp-url }}
+    permissions:
+      contents: write
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait for approval
+        run: echo "Waiting for approval"
+
       - name: Log in to Azure
         uses: azure/login@v2
         with:
@@ -130,3 +143,24 @@ jobs:
 
       - name: Azure logout
         run: az logout
+
+      - name: Create Git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          TAG_NAME="v${{ needs.build-and-push.outputs.image-tag }}-${{ needs.build-and-push.outputs.timestamp }}"
+          
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag $TAG_NAME already exists, skipping tag creation"
+          else
+            git tag -a "$TAG_NAME" -m "Production release $TAG_NAME
+            
+            Deployed by: ${{ github.actor }}
+            Commit: ${{ github.sha }}
+            Workflow: ${{ github.run_id }}
+            Deployed at: ${{ needs.build-and-push.outputs.timestamp }}"
+            
+            git push origin "$TAG_NAME"
+            echo "Created and pushed tag $TAG_NAME"
+          fi
