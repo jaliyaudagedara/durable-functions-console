@@ -11,6 +11,7 @@
 @inject DurableFunctionService DurableFunctionService
 @inject LocalStorageService LocalStorageService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
 <PageTitle>Durable Functions Console</PageTitle>
@@ -165,7 +166,7 @@
     private bool _showHistory = true;
     private bool _showHistoryOutput;
     private bool _showInput = true;
-    private bool _returnInternalServerErrorOnFailure;
+    private bool _returnInternalServerErrorOnFailure; 
 
     protected override void OnParametersSet()
     {
@@ -180,6 +181,15 @@
     {
         if (firstRender)
         {
+            // Handle the needsReload query parameter
+            var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+
+            if (query["needsReload"] == "true")
+            {
+                await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", StorageKeys.IsHomePageNeedsReload, "true");
+            }
+
             await LoadConfiguration();
         }
 

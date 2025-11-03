@@ -7,6 +7,7 @@
 @using DfxConsole.BlazorUI.Services
 @inject DurableFunctionService DurableFunctionService
 @inject LocalStorageService LocalStorageService
+@inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 @implements IAsyncDisposable
@@ -285,6 +286,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+
         await LoadConfiguration();
         await CheckAndHandleReloadFlag();
     }
@@ -318,15 +322,22 @@
     {
         try
         {
-            var isReloadRequired = await LocalStorageService.GetItemAsync<bool>(StorageKeys.IsHomePageNeedsReload);
+            var isReloadRequiredJson = await JSRuntime.InvokeAsync<string?>("sessionStorage.getItem", StorageKeys.IsHomePageNeedsReload);
 
-            if (isReloadRequired)
+            if (!string.IsNullOrEmpty(isReloadRequiredJson))
             {
-                // Clear the flag first to prevent infinite reload loop
-                await LocalStorageService.RemoveItemAsync(StorageKeys.IsHomePageNeedsReload);
+                // IMPORTANT: Workaround: When a new tab is opened and from that, a monaco modal is opened, it's not getting styles
+                // Forcing a page reload in such cases
+                var isReloadRequired = JsonSerializer.Deserialize<bool>(isReloadRequiredJson);
 
-                // Reload the page
-                await JSRuntime.InvokeVoidAsync("location.reload");
+                if (isReloadRequired)
+                {
+                    // Clear the flag first to prevent infinite reload loop
+                    await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", StorageKeys.IsHomePageNeedsReload);
+
+                    // Reload the page
+                    await JSRuntime.InvokeVoidAsync("location.reload");
+                }
             }
         }
         catch (Exception ex)

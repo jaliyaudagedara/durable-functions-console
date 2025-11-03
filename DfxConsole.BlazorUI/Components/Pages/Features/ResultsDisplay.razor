@@ -475,9 +475,7 @@
             return;
         }
 
-        await LocalStorageService.SetItemAsync<bool>(StorageKeys.IsHomePageNeedsReload, true);
-
-        var url = $"/instances/{Uri.EscapeDataString(instanceId)}?showHistoryOutput=true&returnInternalServerErrorOnFailure=true";
+        var url = $"/instances/{Uri.EscapeDataString(instanceId)}?showHistoryOutput=true&returnInternalServerErrorOnFailure=true&needsReload=true";
         await JSRuntime.InvokeVoidAsync("window.open", url, "_blank");
     }
 
@@ -488,9 +486,7 @@
             return;
         }
 
-        await LocalStorageService.SetItemAsync<bool>(StorageKeys.IsHomePageNeedsReload, true);
-
-        var url = $"/entities/{Uri.EscapeDataString(entityName)}/{Uri.EscapeDataString(entityKey)}";
+        var url = $"/entities/{Uri.EscapeDataString(entityName)}/{Uri.EscapeDataString(entityKey)}?needsReload=true";
         await JSRuntime.InvokeVoidAsync("window.open", url, "_blank");
     }
 

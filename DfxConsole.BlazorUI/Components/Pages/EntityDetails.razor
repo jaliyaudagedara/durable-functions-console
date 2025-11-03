@@ -10,6 +10,7 @@
 @inject DurableFunctionService DurableFunctionService
 @inject LocalStorageService LocalStorageService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
 <PageTitle>Entity Details - Durable Functions Console</PageTitle>
@@ -176,6 +177,14 @@
     {
         if (firstRender)
         {
+            var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+
+            if (query["needsReload"] == "true")
+            {
+                await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", StorageKeys.IsHomePageNeedsReload, "true");
+            }
+
             await LoadConfiguration();
         }
 
