@@ -7,186 +7,17 @@
 @using DfxConsole.BlazorUI.Services
 @inject DurableFunctionService DurableFunctionService
 @inject LocalStorageService LocalStorageService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 
 <PageTitle>Durable Functions Console</PageTitle>
 
 <div class="container-fluid px-3 py-2">
-    <div class="row g-3">
-        <div class="col-lg-6">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0"><i class="bi bi-gear-fill me-2"></i>Configuration</h6>
-                    <button type="button"
-                            class="btn btn-sm btn-outline-danger py-0 px-2"
-                            @onclick="ClearConfiguration"
-                            title="Clear all configuration">
-                        <i class="bi bi-trash"></i> Clear
-                    </button>
-                </div>
-                <div class="card-body py-2">
-                    <div class="mb-2">
-                        <label class="form-label mb-1 small">Function App URL <span class="text-danger">*</span></label>
-                        <input type="text"
-                               class="form-control form-control-sm @(_durableFunctionConfigurationValidationError && string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) ? "is-invalid" : "")"
-                               value="@_durableFunctionConfiguration.FunctionAppUrl"
-                               @oninput="@(e => { _durableFunctionConfiguration.FunctionAppUrl = e.Value?.ToString() ?? string.Empty; OnConfigurationChanged(); })"
-                               placeholder="https://your-function-app.azurewebsites.net" />
-                        @if (_durableFunctionConfigurationValidationError && string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl))
-                        {
-                            <div class="invalid-feedback d-block">Function App URL is required.</div>
-                        }
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label mb-1 small">Auth Code (System Key) <span class="text-danger">*</span></label>
-                        <input type="password"
-                               class="form-control form-control-sm @(_durableFunctionConfigurationValidationError && string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode) ? "is-invalid" : "")"
-                               value="@_durableFunctionConfiguration.AuthCode"
-                               @oninput="@(e => { _durableFunctionConfiguration.AuthCode = e.Value?.ToString() ?? string.Empty; OnConfigurationChanged(); })"
-                               placeholder="Your system key" />
-                        @if (_durableFunctionConfigurationValidationError && string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))
-                        {
-                            <div class="invalid-feedback d-block">Auth Code is required.</div>
-                        }
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label mb-1 small">Task Hub (Optional)</label>
-                        <input type="text"
-                               class="form-control form-control-sm"
-                               value="@_durableFunctionConfiguration.TaskHub"
-                               @oninput="@(e => { _durableFunctionConfiguration.TaskHub = e.Value?.ToString() ?? string.Empty; OnConfigurationChanged(); })"
-                               placeholder="Default" />
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label mb-1 small">Connection Name (Optional)</label>
-                        <input type="text"
-                               class="form-control form-control-sm"
-                               value="@_durableFunctionConfiguration.ConnectionName"
-                               @oninput="@(e => { _durableFunctionConfiguration.ConnectionName = e.Value?.ToString() ?? string.Empty; OnConfigurationChanged(); })"
-                               placeholder="Default" />
-                    </div>
-
-                    <div class="mb-0">
-                        <label class="form-label mb-1 small d-flex justify-content-between align-items-center">
-                            <span>Custom HTTP Headers (Optional)</span>
-                            <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" @onclick="AddCustomHeader">
-                                <i class="bi bi-plus-circle"></i> Add
-                            </button>
-                        </label>
-                        @if (_customHeadersList.Any())
-                        {
-                            <div class="custom-headers-container">
-                                @foreach (var header in _customHeadersList)
-                                {
-                                    <div class="row g-1 mb-1">
-                                        <div class="col-5">
-                                            <input type="text"
-                                                   class="form-control form-control-sm"
-                                                   value="@header.Key"
-                                                   @oninput="@(e => { header.Key = e.Value?.ToString() ?? string.Empty; UpdateCustomHeaders(); OnConfigurationChanged(); })"
-                                                   placeholder="Header Name" />
-                                        </div>
-                                        <div class="col-6">
-                                            <input type="text"
-                                                   class="form-control form-control-sm"
-                                                   value="@header.Value"
-                                                   @oninput="@(e => { header.Value = e.Value?.ToString() ?? string.Empty; UpdateCustomHeaders(); OnConfigurationChanged(); })"
-                                                   placeholder="Header Value" />
-                                        </div>
-                                        <div class="col-1">
-                                            <button type="button"
-                                                    class="btn btn-sm btn-outline-danger w-100 py-0"
-                                                    @onclick="() => RemoveCustomHeader(header)">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                        }
-                        <small class="form-text text-muted d-block mt-1">
-                            Common: <code>Authorization</code>, <code>Ocp-Apim-Subscription-Key</code>
-                        </small>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-6">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header">
-                    <h6 class="mb-0"><i class="bi bi-list-task me-2"></i>Select Operation</h6>
-                </div>
-                <div class="card-body py-2">
-                    <select class="form-select form-select-sm mb-2" @bind="SelectedOperation">
-                        <optgroup label="Instance Operations">
-                            <option value="@DurableOperation.GetInstances">Get Instances</option>
-                            <option value="@DurableOperation.GetInstance">Get Instance</option>
-                            <option value="@DurableOperation.TerminateInstance">Terminate Instance</option>
-                            <option value="@DurableOperation.SuspendInstance">Suspend Instance</option>
-                            <option value="@DurableOperation.ResumeInstance">Resume Instance</option>
-                        </optgroup>
-                        <optgroup label="Purge Operations">
-                            <option value="@DurableOperation.PurgeInstance">Purge Instance History</option>
-                            <option value="@DurableOperation.PurgeInstances">Purge Instance Histories</option>
-                        </optgroup>
-                        <optgroup label="Entity Operations">
-                            <option value="@DurableOperation.GetEntities">Get Entities</option>
-                            <option value="@DurableOperation.GetEntity">Get Entity</option>
-                        </optgroup>
-                    </select>
-
-                    <div class="border-top pt-2">
-                        <h6 class="mb-2 small fw-semibold">Parameters</h6>
-                        @switch (_selectedOperation)
-                        {
-                            case DurableOperation.GetInstances:
-                                <GetInstancesParameters OnExecute="ExecuteGetInstances"
-                                                        IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
-                                break;
-                            case DurableOperation.GetInstance:
-                                <GetInstanceParameters OnExecute="ExecuteGetInstance"
-                                                       IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
-                                break;
-                            case DurableOperation.PurgeInstance:
-                                <PurgeInstanceParameters OnExecute="ExecutePurgeInstance"
-                                                         IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
-                                break;
-                            case DurableOperation.PurgeInstances:
-                                <PurgeInstancesParameters OnExecute="ExecutePurgeInstances"
-                                                          IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
-                                break;
-                            case DurableOperation.TerminateInstance:
-                                <TerminateInstanceParameters OnExecute="ExecuteTerminateInstance"
-                                                             IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
-                                break;
-                            case DurableOperation.SuspendInstance:
-                                <SuspendInstanceParameters OnExecute="ExecuteSuspendInstance"
-                                                           IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
-                                break;
-                            case DurableOperation.ResumeInstance:
-                                <ResumeInstanceParameters OnExecute="ExecuteResumeInstance"
-                                                          IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
-                                break;
-                            case DurableOperation.GetEntities:
-                                <GetEntitiesParameters OnExecute="ExecuteGetEntities"
-                                                       IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
-                                break;
-                            case DurableOperation.GetEntity:
-                                <GetEntityParameters OnExecute="ExecuteGetEntity"
-                                                     IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
-                                break;
-                        }
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    @if (_isLoading)
+    @if (_isReloading || !_configurationLoaded)
     {
-        <div class="row mt-3">
+        <div class="row g-3">
             <div class="col-12">
                 <div class="card shadow-sm">
                     <div class="card-body p-3">
@@ -195,8 +26,8 @@
                                 <span class="visually-hidden">Loading...</span>
                             </div>
                             <div class="flex-grow-1">
-                                <h6 class="mb-1 fw-semibold">Processing Request</h6>
-                                <p class="mb-0 text-muted small">Please wait while we execute your operation...</p>
+                                <h6 class="mb-1 fw-semibold">Loading Configuration</h6>
+                                <p class="mb-0 text-muted small">Please wait while we load your settings...</p>
                             </div>
                         </div>
                         <div class="progress mt-3" style="height: 4px;">
@@ -209,22 +40,221 @@
             </div>
         </div>
     }
+    else
+    {
+        <div class="row g-3">
+            <div class="col-lg-6">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-gear-fill me-2"></i>CONFIGURATION</h6>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-danger py-0 px-2"
+                                @onclick="ClearConfiguration"
+                                title="Clear all configuration">
+                            <i class="bi bi-trash"></i> Clear
+                        </button>
+                    </div>
+                    <div class="card-body py-2">
+                        <div class="mb-2">
+                            <label class="form-label mb-1 small">Function App URL <span class="text-danger">*</span></label>
+                            <input type="text"
+                                   class="form-control form-control-sm @(_durableFunctionConfigurationValidationError && string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) ? "is-invalid" : "")"
+                                   value="@_durableFunctionConfiguration.FunctionAppUrl"
+                                   @oninput="@(e => { _durableFunctionConfiguration.FunctionAppUrl = e.Value?.ToString() ?? string.Empty; OnConfigurationChanged(); })"
+                                   placeholder="https://your-function-app.azurewebsites.net" />
+                            @if (_durableFunctionConfigurationValidationError && string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl))
+                            {
+                                <div class="invalid-feedback d-block">Function App URL is required.</div>
+                            }
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label mb-1 small">Auth Code (System Key) <span class="text-danger">*</span></label>
+                            <input type="password"
+                                   class="form-control form-control-sm @(_durableFunctionConfigurationValidationError && string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode) ? "is-invalid" : "")"
+                                   value="@_durableFunctionConfiguration.AuthCode"
+                                   @oninput="@(e => { _durableFunctionConfiguration.AuthCode = e.Value?.ToString() ?? string.Empty; OnConfigurationChanged(); })"
+                                   placeholder="Your system key" />
+                            @if (_durableFunctionConfigurationValidationError && string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))
+                            {
+                                <div class="invalid-feedback d-block">Auth Code is required.</div>
+                            }
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label mb-1 small">Task Hub (Optional)</label>
+                            <input type="text"
+                                   class="form-control form-control-sm"
+                                   value="@_durableFunctionConfiguration.TaskHub"
+                                   @oninput="@(e => { _durableFunctionConfiguration.TaskHub = e.Value?.ToString() ?? string.Empty; OnConfigurationChanged(); })"
+                                   placeholder="Default" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label mb-1 small">Connection Name (Optional)</label>
+                            <input type="text"
+                                   class="form-control form-control-sm"
+                                   value="@_durableFunctionConfiguration.ConnectionName"
+                                   @oninput="@(e => { _durableFunctionConfiguration.ConnectionName = e.Value?.ToString() ?? string.Empty; OnConfigurationChanged(); })"
+                                   placeholder="Default" />
+                        </div>
 
-    <div class="mt-3">
-        <ResultsDisplay Result="@_result"
-                        CanShowTableView="@_canShowTableView"
-                        IsLoading="@_isLoading"
-                        CurrentResultType="@_currentResultType"
-                        Instances="@_instances"
-                        Entities="@_entities"
-                        SupportsPagination="@_supportsPagination"
-                        HasPreviousPage="@_hasPreviousPage"
-                        HasNextPage="@_hasNextPage"
-                        CurrentPageIndex="@_currentPageIndex"
-                        RowCount="@_rowCount"
-                        OnLoadPreviousPage="LoadPreviousPage"
-                        OnLoadNextPage="LoadNextPage" />
-    </div>
+                        <div class="mb-0">
+                            <label class="form-label mb-1 small d-flex justify-content-between align-items-center">
+                                <span>Custom HTTP Headers (Optional)</span>
+                                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" @onclick="AddCustomHeader">
+                                    <i class="bi bi-plus-circle"></i> Add
+                                </button>
+                            </label>
+                            @if (_customHeadersList.Any())
+                            {
+                                <div class="custom-headers-container">
+                                    @foreach (var header in _customHeadersList)
+                                    {
+                                        <div class="row g-1 mb-1">
+                                            <div class="col-5">
+                                                <input type="text"
+                                                       class="form-control form-control-sm"
+                                                       value="@header.Key"
+                                                       @oninput="@(e => { header.Key = e.Value?.ToString() ?? string.Empty; UpdateCustomHeaders(); OnConfigurationChanged(); })"
+                                                       placeholder="Header Name" />
+                                            </div>
+                                            <div class="col-6">
+                                                <input type="text"
+                                                       class="form-control form-control-sm"
+                                                       value="@header.Value"
+                                                       @oninput="@(e => { header.Value = e.Value?.ToString() ?? string.Empty; UpdateCustomHeaders(); OnConfigurationChanged(); })"
+                                                       placeholder="Header Value" />
+                                            </div>
+                                            <div class="col-1">
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-danger w-100 py-0"
+                                                        @onclick="() => RemoveCustomHeader(header)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            <small class="form-text text-muted d-block mt-1">
+                                Common: <code>Authorization</code>, <code>Ocp-Apim-Subscription-Key</code>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-list-task me-2"></i>OPERATION</h6>
+                    </div>
+                    <div class="card-body py-2">
+                        <select class="form-select form-select-sm mb-2" @bind="SelectedOperation">
+                            <optgroup label="Instance Operations">
+                                <option value="@DurableOperation.GetInstances">Get Instances</option>
+                                <option value="@DurableOperation.GetInstance">Get Instance</option>
+                                <option value="@DurableOperation.TerminateInstance">Terminate Instance</option>
+                                <option value="@DurableOperation.SuspendInstance">Suspend Instance</option>
+                                <option value="@DurableOperation.ResumeInstance">Resume Instance</option>
+                            </optgroup>
+                            <optgroup label="Purge Operations">
+                                <option value="@DurableOperation.PurgeInstance">Purge Instance History</option>
+                                <option value="@DurableOperation.PurgeInstances">Purge Instance Histories</option>
+                            </optgroup>
+                            <optgroup label="Entity Operations">
+                                <option value="@DurableOperation.GetEntities">Get Entities</option>
+                                <option value="@DurableOperation.GetEntity">Get Entity</option>
+                            </optgroup>
+                        </select>
+
+                        <div class="border-top pt-2">
+                            <h6 class="mb-2 small fw-semibold">Parameters</h6>
+                            @switch (_selectedOperation)
+                            {
+                                case DurableOperation.GetInstances:
+                                    <GetInstancesParameters OnExecute="ExecuteGetInstances"
+                                                            IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
+                                    break;
+                                case DurableOperation.GetInstance:
+                                    <GetInstanceParameters OnExecute="ExecuteGetInstance"
+                                                           IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
+                                    break;
+                                case DurableOperation.PurgeInstance:
+                                    <PurgeInstanceParameters OnExecute="ExecutePurgeInstance"
+                                                             IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
+                                    break;
+                                case DurableOperation.PurgeInstances:
+                                    <PurgeInstancesParameters OnExecute="ExecutePurgeInstances"
+                                                              IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
+                                    break;
+                                case DurableOperation.TerminateInstance:
+                                    <TerminateInstanceParameters OnExecute="ExecuteTerminateInstance"
+                                                                 IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
+                                    break;
+                                case DurableOperation.SuspendInstance:
+                                    <SuspendInstanceParameters OnExecute="ExecuteSuspendInstance"
+                                                               IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
+                                    break;
+                                case DurableOperation.ResumeInstance:
+                                    <ResumeInstanceParameters OnExecute="ExecuteResumeInstance"
+                                                              IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
+                                    break;
+                                case DurableOperation.GetEntities:
+                                    <GetEntitiesParameters OnExecute="ExecuteGetEntities"
+                                                           IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
+                                    break;
+                                case DurableOperation.GetEntity:
+                                    <GetEntityParameters OnExecute="ExecuteGetEntity"
+                                                         IsConfigValid="@(!string.IsNullOrWhiteSpace(_durableFunctionConfiguration.FunctionAppUrl) && !string.IsNullOrWhiteSpace(_durableFunctionConfiguration.AuthCode))" />
+                                    break;
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (_isLoading)
+        {
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="card shadow-sm">
+                        <div class="card-body p-3">
+                            <div class="d-flex align-items-center">
+                                <div class="spinner-border text-primary me-3" role="status" style="width: 2rem; height: 2rem;">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1 fw-semibold">Processing Request</h6>
+                                    <p class="mb-0 text-muted small">Please wait while we execute your operation...</p>
+                                </div>
+                            </div>
+                            <div class="progress mt-3" style="height: 4px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                     role="progressbar"
+                                     style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="mt-3">
+            <ResultsDisplay Result="@_result"
+                            CanShowTableView="@_canShowTableView"
+                            IsLoading="@_isLoading"
+                            CurrentResultType="@_currentResultType"
+                            Instances="@_instances"
+                            Entities="@_entities"
+                            SupportsPagination="@_supportsPagination"
+                            HasPreviousPage="@_hasPreviousPage"
+                            HasNextPage="@_hasNextPage"
+                            CurrentPageIndex="@_currentPageIndex"
+                            RowCount="@_rowCount"
+                            OnLoadPreviousPage="LoadPreviousPage"
+                            OnLoadNextPage="LoadNextPage" />
+        </div>
+    }
 </div>
 
 <style>
@@ -245,6 +275,7 @@
         0% {
             background-position: 1rem 0;
         }
+
         100% {
             background-position: 0 0;
         }
@@ -252,11 +283,12 @@
 </style>
 
 @code {
-    // ... rest of your code remains the same
     private DurableFunctionConfiguration _durableFunctionConfiguration = new();
     private DurableOperation _selectedOperation = DurableOperation.GetInstances;
     private string _result = string.Empty;
     private bool _isLoading = false;
+    private bool _isReloading = false;
+    private bool _configurationLoaded = false;
     private bool _canShowTableView = false;
     private List<InstanceInfo> _instances = new();
     private List<EntityInfo> _entities = new();
@@ -264,6 +296,7 @@
     private ResultType _currentResultType = ResultType.Instance;
     private int? _rowCount = null;
     private Timer? _autoSaveTimer;
+    private bool _firstRenderCompleted = false;
 
     // Custom headers management
     private List<CustomHeader> _customHeadersList = new();
@@ -283,9 +316,21 @@
         public string Value { get; set; } = string.Empty;
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        await LoadConfiguration();
+        if (firstRender)
+        {
+            _firstRenderCompleted = true;
+
+            await CheckAndHandleReloadFlag();
+
+            if (!_isReloading)
+            {
+                await LoadConfiguration();
+            }
+
+            StateHasChanged();
+        }
     }
 
     private async Task LoadConfiguration()
@@ -307,10 +352,41 @@
                 }
             }
         }
-        catch (Exception ex)
+        finally
         {
-            Console.WriteLine($"Error loading configuration: {ex.Message}");
+            _configurationLoaded = true;
+            StateHasChanged();
         }
+    }
+
+    private async Task CheckAndHandleReloadFlag()
+    {
+        var isHomePageNeedsReload = await JSRuntime.InvokeAsync<string?>("sessionStorage.getItem", StorageKeys.IsHomePageNeedsReload);
+
+        if (!string.IsNullOrEmpty(isHomePageNeedsReload))
+        {
+            // IMPORTANT: Workaround: When a new tab is opened and from that, a monaco modal is opened, it's not getting styles
+            // Forcing a page reload in such cases
+            var isReloadRequired = JsonSerializer.Deserialize<bool>(isHomePageNeedsReload);
+
+            if (isReloadRequired)
+            {
+                // Show loading indicator
+                _isReloading = true;
+                StateHasChanged();
+
+                // Clear the flag first to prevent infinite reload loop
+                await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", StorageKeys.IsHomePageNeedsReload);
+
+                // Reload the page
+                await JSRuntime.InvokeVoidAsync("location.reload");
+
+                return; // Exit early since we're reloading
+            }
+        }
+
+        // Only set _isReloading to false if we didn't trigger a reload
+        _isReloading = false;
     }
 
     private async Task SaveConfiguration()

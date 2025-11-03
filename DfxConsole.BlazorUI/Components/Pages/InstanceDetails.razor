@@ -11,9 +11,10 @@
 @inject DurableFunctionService DurableFunctionService
 @inject LocalStorageService LocalStorageService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
-<PageTitle>Durable Functions Console</PageTitle>
+<PageTitle>Instance - Durable Functions Console</PageTitle>
 
 <div class="container-fluid">
     <div class="row">
@@ -21,7 +22,7 @@
             <div class="card shadow-sm">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="bi bi-info-circle-fill me-2"></i>Instance Details
+                        <i class="bi bi-info-circle-fill me-2"></i>INSTANCE
                     </h5>
                 </div>
                 <div class="card-body">
@@ -118,7 +119,7 @@
 
     @if (_instance != null && !_isLoading)
     {
-        <InstanceDetailViewer Instance="@_instance" ShowQuickInfo="true" />
+        <InstanceDetailViewer @key="@_instance.InstanceId" Instance="@_instance" ShowQuickInfo="true" />
     }
 </div>
 
@@ -165,7 +166,7 @@
     private bool _showHistory = true;
     private bool _showHistoryOutput;
     private bool _showInput = true;
-    private bool _returnInternalServerErrorOnFailure;
+    private bool _returnInternalServerErrorOnFailure; 
 
     protected override void OnParametersSet()
     {
@@ -180,6 +181,15 @@
     {
         if (firstRender)
         {
+            // Handle the needsReload query parameter
+            var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+
+            if (query["needsReload"] == "true")
+            {
+                await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", StorageKeys.IsHomePageNeedsReload, "true");
+            }
+
             await LoadConfiguration();
         }
 
@@ -237,7 +247,9 @@
 
         _validationError = false;
         _hasLoaded = false;
-        NavigationManager.NavigateTo($"/instances/{Uri.EscapeDataString(_inputInstanceId)}{BuildQueryString()}");
+        
+        // FORCE FULL PAGE RELOAD - this will completely reinitialize everything including Monaco
+        NavigationManager.NavigateTo($"/instances/{Uri.EscapeDataString(_inputInstanceId)}{BuildQueryString()}", forceLoad: true);
     }
 
     private async Task LoadInstanceAsync()

@@ -1,6 +1,7 @@
 @inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
 
-<div class="card shadow-sm">
+<div class="card shadow-sm @(_isFullScreen ? "fullscreen-card" : "")">
     <div class="card-header @HeaderClass">
         <div class="d-flex justify-content-between align-items-center">
             <h5 class="mb-0">
@@ -12,166 +13,204 @@
             </h5>
             <div class="d-flex gap-2">
                 @AdditionalHeaderContent
+                <button class="btn btn-sm @(_isFullScreen ? "btn-primary" : "btn-outline-secondary") fullscreen-toggle-btn"
+                        @onclick="ToggleFullScreen"
+                        title="@(_isFullScreen ? "Exit Full Screen (Esc)" : "Full Screen (F11)")">
+                    <i class="bi bi-@(_isFullScreen ? "fullscreen-exit" : "arrows-fullscreen") me-1"></i>
+                    @(_isFullScreen ? "Exit" : "Expand")
+                </button>
                 @if (ShowCopyButton)
                 {
                     <button class="btn btn-sm btn-outline-primary" @onclick="CopyToClipboard" disabled="@_isCopying">
                         <span class="bi bi-clipboard@(_copySuccess ? "-check" : "")"></span>
-                        @if (_isCopying)
-                        {
-                            <text>Copying...</text>
-                        }
-                        else if (_copySuccess)
-                        {
-                            <text>Copied!</text>
-                        }
-                        else
-                        {
-                            <text>Copy</text>
-                        }
+                        @(_isCopying ? "Copying..." : _copySuccess ? "Copied!" : "Copy")
                     </button>
                 }
             </div>
         </div>
     </div>
     <div class="card-body p-0">
-        <div class="code-viewer-container" style="@GetContainerStyle()">
-            <pre class="m-0"><code class="@LanguageClass">@Content</code></pre>
-        </div>
+        <div @ref="_editorContainer" class="monaco-editor-container" style="@GetContainerStyle()"></div>
     </div>
 </div>
 
 <style>
-    .code-viewer-container {
-        overflow: auto;
-        background-color: #1e1e1e;
-        max-width: 100%;
+    .monaco-editor-container {
+        width: 100%;
+        overflow: hidden;
         position: relative;
     }
 
-    .code-viewer-container pre {
-        background-color: #1e1e1e;
-        color: #d4d4d4;
-        padding: 12px;
-        margin: 0;
-        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-        font-size: 14px;
-        line-height: 1.5;
-        white-space: pre-wrap;
-        word-wrap: break-word;
+    .fullscreen-card {
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100vw !important;
+        height: 100vh !important;
+        z-index: 9999;
+        margin: 0 !important;
+        border-radius: 0 !important;
     }
 
-    .code-viewer-container code {
-        background-color: transparent;
-        color: inherit;
-        padding: 0;
+        .fullscreen-card .monaco-editor-container {
+            height: calc(100vh - 60px) !important;
+            max-height: none !important;
+        }
+
+        .fullscreen-card .card-body {
+            height: calc(100vh - 60px);
+        }
+
+    .fullscreen-toggle-btn {
+        font-weight: 500;
+        min-width: 95px;
+        transition: all 0.2s ease;
     }
 
-    @@media (max-width: 991.98px) {
-        .code-viewer-container {
-            max-height: 500px;
+        .fullscreen-toggle-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .fullscreen-toggle-btn i {
+            font-size: 1.1em;
+        }
+
+    /* Enhanced visibility when in fullscreen mode */
+    .fullscreen-card .fullscreen-toggle-btn {
+        animation: pulse-subtle 2s ease-in-out infinite;
+    }
+
+    @@keyframes pulse-subtle {
+        0%, 100% {
+            box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.4);
+        }
+
+        50% {
+            box-shadow: 0 0 0 4px rgba(13, 110, 253, 0);
         }
     }
 </style>
 
 @code {
-    /// <summary>
-    /// The content to display in the code viewer
-    /// </summary>
-    [Parameter, EditorRequired]
-    public string Content { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Content { get; set; } = string.Empty;
+    [Parameter] public string Icon { get; set; } = "file-earmark-code";
+    [Parameter] public string HeaderClass { get; set; } = "";
+    [Parameter] public string LanguageClass { get; set; } = string.Empty;
+    [Parameter] public bool ShowCopyButton { get; set; } = true;
+    [Parameter] public string MaxHeight { get; set; } = "calc(100vh - 400px)";
+    [Parameter] public string MinHeight { get; set; } = "300px";
+    [Parameter] public RenderFragment? AdditionalHeaderContent { get; set; }
+    [Parameter] public EventCallback<bool> OnCopyComplete { get; set; }
 
-    /// <summary>
-    /// Bootstrap icon name (without 'bi-' prefix)
-    /// </summary>
-    [Parameter]
-    public string Icon { get; set; } = "file-earmark-code";
+    private ElementReference _editorContainer;
+    private IJSObjectReference? _jsModule;
+    private bool _isCopying;
+    private bool _copySuccess;
+    private bool _isFullScreen;
+    private string _lastContent = string.Empty;
+    private bool _initialized;
 
-    /// <summary>
-    /// CSS class for the card header (e.g., "bg-info text-white")
-    /// </summary>
-    [Parameter]
-    public string HeaderClass { get; set; } = "";
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            try
+            {
+                _jsModule = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/monacoEditor.js");
+                await _jsModule.InvokeVoidAsync("initializeMonacoEditor", _editorContainer, Content);
+                _lastContent = Content;
+                _initialized = true;
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing Monaco: {ex.Message}");
+            }
+        }
+        else if (_initialized && _lastContent != Content)
+        {
+            try
+            {
+                await _jsModule!.InvokeVoidAsync("updateEditorContent", _editorContainer, Content);
+                _lastContent = Content;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error updating Monaco: {ex.Message}");
+            }
+        }
+    }
 
-    /// <summary>
-    /// Language class for syntax highlighting (e.g., "language-json", "language-csharp")
-    /// </summary>
-    [Parameter]
-    public string LanguageClass { get; set; } = string.Empty;
+    private async Task ToggleFullScreen()
+    {
+        _isFullScreen = !_isFullScreen;
+        StateHasChanged();
 
-    /// <summary>
-    /// Whether to show the copy to clipboard button
-    /// </summary>
-    [Parameter]
-    public bool ShowCopyButton { get; set; } = true;
+        // Give the DOM time to update, then resize the Monaco editor
+        await Task.Delay(50);
 
-    /// <summary>
-    /// Maximum height of the code container (e.g., "500px", "calc(100vh - 400px)")
-    /// </summary>
-    [Parameter]
-    public string MaxHeight { get; set; } = "calc(100vh - 400px)";
-
-    /// <summary>
-    /// Minimum height of the code container
-    /// </summary>
-    [Parameter]
-    public string MinHeight { get; set; } = "300px";
-
-    /// <summary>
-    /// Additional content to render in the header (e.g., buttons, badges)
-    /// </summary>
-    [Parameter]
-    public RenderFragment? AdditionalHeaderContent { get; set; }
-
-    /// <summary>
-    /// Event callback triggered when copy operation completes successfully
-    /// </summary>
-    [Parameter]
-    public EventCallback<bool> OnCopyComplete { get; set; }
-
-    private bool _isCopying = false;
-    private bool _copySuccess = false;
+        if (_jsModule != null && _initialized)
+        {
+            try
+            {
+                await _jsModule.InvokeVoidAsync("resizeEditor", _editorContainer);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error resizing Monaco: {ex.Message}");
+            }
+        }
+    }
 
     private async Task CopyToClipboard()
     {
-        if (string.IsNullOrEmpty(Content))
-        {
-            return;
-        }
-
+        if (string.IsNullOrEmpty(Content)) return;
         _isCopying = true;
-        _copySuccess = false;
         StateHasChanged();
 
         try
         {
             var success = await JSRuntime.InvokeAsync<bool>("clipboardInterop.copyToClipboard", Content);
             _copySuccess = success;
-
             if (success)
             {
                 await OnCopyComplete.InvokeAsync(true);
-
-                _ = Task.Delay(2000).ContinueWith(_ =>
-                {
-                    _copySuccess = false;
-                    InvokeAsync(StateHasChanged);
-                });
+                _ = Task.Delay(2000).ContinueWith(_ => { _copySuccess = false; InvokeAsync(StateHasChanged); });
             }
         }
-        catch (Exception)
-        {
-            _copySuccess = false;
-            await OnCopyComplete.InvokeAsync(false);
-        }
-        finally
-        {
-            _isCopying = false;
-            StateHasChanged();
-        }
+        catch { _copySuccess = false; }
+        finally { _isCopying = false; StateHasChanged(); }
     }
 
     private string GetContainerStyle()
     {
-        return $"max-height: {MaxHeight}; min-height: {MinHeight};";
+        if (_isFullScreen)
+        {
+            return "height: calc(100vh - 60px); max-height: none;";
+        }
+        return $"height: {(MaxHeight.Contains("calc") ? MaxHeight : MinHeight)}; max-height: {MaxHeight}; min-height: {MinHeight};";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _initialized = false;
+
+        if (_jsModule != null)
+        {
+            try
+            {
+                await _jsModule.InvokeVoidAsync("disposeEditorSync", _editorContainer);
+            }
+            catch { }
+
+            try
+            {
+                await _jsModule.DisposeAsync();
+            }
+            catch { }
+        }
     }
 }
