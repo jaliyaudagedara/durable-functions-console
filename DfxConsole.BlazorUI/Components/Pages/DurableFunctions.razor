@@ -26,8 +26,8 @@
                                 <span class="visually-hidden">Loading...</span>
                             </div>
                             <div class="flex-grow-1">
-                                <h6 class="mb-1 fw-semibold">@(_isReloading ? "Reloading Page" : "Loading Configuration")</h6>
-                                <p class="mb-0 text-muted small">@(_isReloading ? "Please wait while we refresh the page..." : "Please wait while we load your settings...")</p>
+                                <h6 class="mb-1 fw-semibold">Loading Configuration</h6>
+                                <p class="mb-0 text-muted small">Please wait while we load your settings...</p>
                             </div>
                         </div>
                         <div class="progress mt-3" style="height: 4px;">
@@ -46,7 +46,7 @@
             <div class="col-lg-6">
                 <div class="card h-100 shadow-sm">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0"><i class="bi bi-gear-fill me-2"></i>Configuration</h6>
+                        <h6 class="mb-0"><i class="bi bi-gear-fill me-2"></i>CONFIGURATION</h6>
                         <button type="button"
                                 class="btn btn-sm btn-outline-danger py-0 px-2"
                                 @onclick="ClearConfiguration"
@@ -145,7 +145,7 @@
             <div class="col-lg-6">
                 <div class="card h-100 shadow-sm">
                     <div class="card-header">
-                        <h6 class="mb-0"><i class="bi bi-list-task me-2"></i>Select Operation</h6>
+                        <h6 class="mb-0"><i class="bi bi-list-task me-2"></i>OPERATION</h6>
                     </div>
                     <div class="card-body py-2">
                         <select class="form-select form-select-sm mb-2" @bind="SelectedOperation">
@@ -352,10 +352,6 @@
                 }
             }
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error loading configuration: {ex.Message}");
-        }
         finally
         {
             _configurationLoaded = true;
@@ -365,40 +361,32 @@
 
     private async Task CheckAndHandleReloadFlag()
     {
-        try
-        {
-            var isHomePageNeedsReload = await JSRuntime.InvokeAsync<string?>("sessionStorage.getItem", StorageKeys.IsHomePageNeedsReload);
+        var isHomePageNeedsReload = await JSRuntime.InvokeAsync<string?>("sessionStorage.getItem", StorageKeys.IsHomePageNeedsReload);
 
-            if (!string.IsNullOrEmpty(isHomePageNeedsReload))
+        if (!string.IsNullOrEmpty(isHomePageNeedsReload))
+        {
+            // IMPORTANT: Workaround: When a new tab is opened and from that, a monaco modal is opened, it's not getting styles
+            // Forcing a page reload in such cases
+            var isReloadRequired = JsonSerializer.Deserialize<bool>(isHomePageNeedsReload);
+
+            if (isReloadRequired)
             {
-                // IMPORTANT: Workaround: When a new tab is opened and from that, a monaco modal is opened, it's not getting styles
-                // Forcing a page reload in such cases
-                var isReloadRequired = JsonSerializer.Deserialize<bool>(isHomePageNeedsReload);
+                // Show loading indicator
+                _isReloading = true;
+                StateHasChanged();
 
-                if (isReloadRequired)
-                {
-                    // Show loading indicator
-                    _isReloading = true;
-                    StateHasChanged();
+                // Clear the flag first to prevent infinite reload loop
+                await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", StorageKeys.IsHomePageNeedsReload);
 
-                    // Clear the flag first to prevent infinite reload loop
-                    await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", StorageKeys.IsHomePageNeedsReload);
+                // Reload the page
+                await JSRuntime.InvokeVoidAsync("location.reload");
 
-                    // Reload the page
-                    await JSRuntime.InvokeVoidAsync("location.reload");
-
-                    return; // Exit early since we're reloading
-                }
+                return; // Exit early since we're reloading
             }
+        }
 
-            // Only set _isReloading to false if we didn't trigger a reload
-            _isReloading = false;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error checking reload flag: {ex.Message}");
-            _isReloading = false;
-        }
+        // Only set _isReloading to false if we didn't trigger a reload
+        _isReloading = false;
     }
 
     private async Task SaveConfiguration()

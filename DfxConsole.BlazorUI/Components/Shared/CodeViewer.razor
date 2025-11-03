@@ -13,8 +13,11 @@
             </h5>
             <div class="d-flex gap-2">
                 @AdditionalHeaderContent
-                <button class="btn btn-sm btn-outline-secondary" @onclick="ToggleFullScreen" title="@(_isFullScreen ? "Exit Full Screen" : "Full Screen")">
-                    <i class="bi bi-@(_isFullScreen ? "fullscreen-exit" : "arrows-fullscreen")"></i>
+                <button class="btn btn-sm @(_isFullScreen ? "btn-primary" : "btn-outline-secondary") fullscreen-toggle-btn"
+                        @onclick="ToggleFullScreen"
+                        title="@(_isFullScreen ? "Exit Full Screen (Esc)" : "Full Screen (F11)")">
+                    <i class="bi bi-@(_isFullScreen ? "fullscreen-exit" : "arrows-fullscreen") me-1"></i>
+                    @(_isFullScreen ? "Exit" : "Expand")
                 </button>
                 @if (ShowCopyButton)
                 {
@@ -27,7 +30,7 @@
         </div>
     </div>
     <div class="card-body p-0">
-        <div @ref="_editorContainer" class="monaco-editor-container @(_isAnimating ? "editor-fade-in" : "")" style="@GetContainerStyle()"></div>
+        <div @ref="_editorContainer" class="monaco-editor-container" style="@GetContainerStyle()"></div>
     </div>
 </div>
 
@@ -36,13 +39,7 @@
         width: 100%;
         overflow: hidden;
         position: relative;
-        opacity: 0;
-        transition: opacity 0.4s ease-in-out;
     }
-
-        .monaco-editor-container.editor-fade-in {
-            opacity: 1;
-        }
 
     .fullscreen-card {
         position: fixed !important;
@@ -66,21 +63,34 @@
             height: calc(100vh - 60px);
         }
 
-    /* Smooth content update animation */
-    @@keyframes contentUpdate {
-        0% {
-            opacity: 0.7;
-            transform: translateY(2px);
-        }
-
-        100% {
-            opacity: 1;
-            transform: translateY(0);
-        }
+    .fullscreen-toggle-btn {
+        font-weight: 500;
+        min-width: 95px;
+        transition: all 0.2s ease;
     }
 
-    .monaco-editor-container.content-updating {
-        animation: contentUpdate 0.3s ease-out;
+        .fullscreen-toggle-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .fullscreen-toggle-btn i {
+            font-size: 1.1em;
+        }
+
+    /* Enhanced visibility when in fullscreen mode */
+    .fullscreen-card .fullscreen-toggle-btn {
+        animation: pulse-subtle 2s ease-in-out infinite;
+    }
+
+    @@keyframes pulse-subtle {
+        0%, 100% {
+            box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.4);
+        }
+
+        50% {
+            box-shadow: 0 0 0 4px rgba(13, 110, 253, 0);
+        }
     }
 </style>
 
@@ -102,7 +112,6 @@
     private bool _isFullScreen;
     private string _lastContent = string.Empty;
     private bool _initialized;
-    private bool _isAnimating;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -114,9 +123,6 @@
                 await _jsModule.InvokeVoidAsync("initializeMonacoEditor", _editorContainer, Content);
                 _lastContent = Content;
                 _initialized = true;
-
-                // Trigger fade-in animation
-                _isAnimating = true;
                 StateHasChanged();
             }
             catch (Exception ex)
@@ -128,16 +134,8 @@
         {
             try
             {
-                // Trigger content update animation
-                _isAnimating = false;
-                StateHasChanged();
-                await Task.Delay(10);
-
                 await _jsModule!.InvokeVoidAsync("updateEditorContent", _editorContainer, Content);
                 _lastContent = Content;
-
-                _isAnimating = true;
-                StateHasChanged();
             }
             catch (Exception ex)
             {
