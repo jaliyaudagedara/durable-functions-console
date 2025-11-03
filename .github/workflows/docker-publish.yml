@@ -231,7 +231,7 @@ jobs:
 
   deploy-prod:
     needs: build-and-push
-    if: |
+    if: >
       github.event_name == 'push' && 
       github.ref == 'refs/heads/main' &&
       needs.build-and-push.outputs.is-pr == 'false'
