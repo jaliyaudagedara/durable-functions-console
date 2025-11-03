@@ -15,7 +15,7 @@
 <PageTitle>Durable Functions Console</PageTitle>
 
 <div class="container-fluid px-3 py-2">
-    @if (_isReloading)
+    @if (_isReloading || !_configurationLoaded)
     {
         <div class="row g-3">
             <div class="col-12">
@@ -26,8 +26,8 @@
                                 <span class="visually-hidden">Loading...</span>
                             </div>
                             <div class="flex-grow-1">
-                                <h6 class="mb-1 fw-semibold">Reloading Page</h6>
-                                <p class="mb-0 text-muted small">Please wait while we refresh the page...</p>
+                                <h6 class="mb-1 fw-semibold">@(_isReloading ? "Reloading Page" : "Loading Configuration")</h6>
+                                <p class="mb-0 text-muted small">@(_isReloading ? "Please wait while we refresh the page..." : "Please wait while we load your settings...")</p>
                             </div>
                         </div>
                         <div class="progress mt-3" style="height: 4px;">
@@ -288,6 +288,7 @@
     private string _result = string.Empty;
     private bool _isLoading = false;
     private bool _isReloading = false;
+    private bool _configurationLoaded = false;
     private bool _canShowTableView = false;
     private List<InstanceInfo> _instances = new();
     private List<EntityInfo> _entities = new();
@@ -349,6 +350,11 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading configuration: {ex.Message}");
+        }
+        finally
+        {
+            _configurationLoaded = true;
+            StateHasChanged();
         }
     }
 
