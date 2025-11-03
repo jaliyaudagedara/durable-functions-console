@@ -384,8 +384,12 @@
 
                     // Reload the page
                     await JSRuntime.InvokeVoidAsync("location.reload");
+                    return; // Exit early since we're reloading
                 }
             }
+
+            // Only set _isReloading to false if we didn't trigger a reload
+            _isReloading = false;
         }
         catch (Exception ex)
         {
