@@ -15,21 +15,20 @@ env:
   IMAGE_NAME: jaliyaudagedara/durable-functions-console
 
 jobs:
-  check-comment:
-    if: github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '/build')
+  build-and-push:
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '/build'))
     runs-on: ubuntu-latest
     permissions:
+      contents: write
+      packages: write
       issues: write
       pull-requests: write
-      contents: read
-    outputs:
-      should-build: ${{ steps.check.outputs.result }}
-      pr-ref: ${{ steps.pr.outputs.ref }}
-      pr-sha: ${{ steps.pr.outputs.sha }}
-      pr-number: ${{ github.event.issue.number }}
+
     steps:
-      - name: Check if commenter is authorized
-        id: check_auth
+      - name: Check if commenter is authorized (for PR builds)
+        if: github.event_name == 'issue_comment'
         run: |
           if [ "${{ github.event.comment.user.login }}" != "jaliyaudagedara" ]; then
             echo "Unauthorized user: ${{ github.event.comment.user.login }}"
@@ -37,11 +36,8 @@ jobs:
           fi
           echo "Authorized user: jaliyaudagedara"
 
-      - name: Check comment and PR
-        id: check
-        run: echo "result=true" >> $GITHUB_OUTPUT
-
       - name: Get PR details
+        if: github.event_name == 'issue_comment'
         id: pr
         uses: actions/github-script@v7
         with:
@@ -53,8 +49,10 @@ jobs:
             });
             core.setOutput('ref', pr.data.head.ref);
             core.setOutput('sha', pr.data.head.sha);
+            core.setOutput('number', context.issue.number);
 
       - name: Add reaction to comment
+        if: github.event_name == 'issue_comment'
         uses: actions/github-script@v7
         with:
           script: |
@@ -65,36 +63,10 @@ jobs:
               content: 'rocket'
             });
 
-      - name: Comment unauthorized attempt
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `❌ Unauthorized: Only @jaliyaudagedara can trigger builds via comments.`
-            });
-
-  build-and-push:
-    needs: [check-comment]
-    if: |
-      always() && 
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'issue_comment' && needs.check-comment.result == 'success' && needs.check-comment.outputs.should-build == 'true')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-      issues: write
-      pull-requests: write
-
-    steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'issue_comment' && needs.check-comment.outputs.pr-ref || github.ref }}
+          ref: ${{ github.event_name == 'issue_comment' && steps.pr.outputs.ref || github.ref }}
           fetch-depth: 0
 
       - name: Read version from file
@@ -113,7 +85,7 @@ jobs:
           BASE_VERSION=${{ steps.read_version.outputs.VERSION }}
           
           if [ "${{ github.event_name }}" == "issue_comment" ]; then
-            SHORT_SHA=$(echo "${{ needs.check-comment.outputs.pr-sha }}" | cut -c1-7)
+            SHORT_SHA=$(echo "${{ steps.pr.outputs.sha }}" | cut -c1-7)
           else
             SHORT_SHA=$(git rev-parse --short HEAD)
           fi
@@ -163,7 +135,7 @@ jobs:
           build-args: |
             VERSION=${{ steps.semver.outputs.FULL_VERSION }}
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
-            VCS_REF=${{ github.event_name == 'issue_comment' && needs.check-comment.outputs.pr-sha || github.sha }}
+            VCS_REF=${{ github.event_name == 'issue_comment' && steps.pr.outputs.sha || github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -179,7 +151,7 @@ jobs:
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: ${{ needs.check-comment.outputs.pr-number }},
+              issue_number: ${{ steps.pr.outputs.number }},
               body: `✅ Docker image built and pushed successfully!\n\n**Image:** \`${{ env.IMAGE_NAME }}:${{ steps.semver.outputs.FULL_VERSION }}\``
             });
 
@@ -187,7 +159,7 @@ jobs:
       image-tag: ${{ steps.semver.outputs.FULL_VERSION }}
       timestamp: ${{ steps.semver.outputs.TIMESTAMP }}
       is-pr: ${{ steps.semver.outputs.IS_PR }}
-      pr-number: ${{ needs.check-comment.outputs.pr-number }}
+      pr-number: ${{ steps.pr.outputs.number }}
 
   deploy-dev:
     needs: build-and-push
@@ -231,7 +203,9 @@ jobs:
 
   deploy-prod:
     needs: build-and-push
-    if: github.ref == 'refs/heads/main'
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: production
