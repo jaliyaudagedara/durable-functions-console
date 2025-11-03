@@ -24,6 +24,15 @@ jobs:
       pr-ref: ${{ steps.pr.outputs.ref }}
       pr-sha: ${{ steps.pr.outputs.sha }}
     steps:
+      - name: Check if commenter is authorized
+        id: check_auth
+        run: |
+          if [ "${{ github.event.comment.user.login }}" != "jaliyaudagedara" ]; then
+            echo "Unauthorized user: ${{ github.event.comment.user.login }}"
+            exit 1
+          fi
+          echo "Authorized user: jaliyaudagedara"
+
       - name: Check comment and PR
         id: check
         run: echo "result=true" >> $GITHUB_OUTPUT
@@ -52,12 +61,24 @@ jobs:
               content: 'rocket'
             });
 
+      - name: Comment unauthorized attempt
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `❌ Unauthorized: Only @jaliyaudagedara can trigger builds via comments.`
+            });
+
   build-and-push:
     needs: [check-comment]
     if: |
       always() && 
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'issue_comment' && needs.check-comment.outputs.should-build == 'true')
+      (github.event_name == 'issue_comment' && needs.check-comment.result == 'success' && needs.check-comment.outputs.should-build == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: write
