@@ -1,13 +1,16 @@
 ﻿let monacoLoaded = false;
+let monacoLoadPromise = null;
 
-async function loadMonaco() {
-    if (monacoLoaded) return;
+// Preload Monaco Editor
+function loadMonaco() {
+    if (monacoLoadPromise) return monacoLoadPromise;
+    
     if (window.monaco) {
         monacoLoaded = true;
-        return;
+        return Promise.resolve();
     }
 
-    return new Promise((resolve, reject) => {
+    monacoLoadPromise = new Promise((resolve, reject) => {
         const loaderScript = document.createElement('script');
         loaderScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js';
         loaderScript.onload = () => {
@@ -20,9 +23,19 @@ async function loadMonaco() {
         loaderScript.onerror = () => reject(new Error('Failed to load Monaco Editor'));
         document.head.appendChild(loaderScript);
     });
+
+    return monacoLoadPromise;
+}
+
+// Start loading Monaco immediately when script loads
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadMonaco);
+} else {
+    loadMonaco();
 }
 
 export async function initializeMonacoEditor(container, content) {
+    // Wait for Monaco to be ready (should already be loaded)
     await loadMonaco();
     
     container.innerHTML = '';
@@ -75,6 +88,14 @@ export function updateEditorContent(container, content) {
                     container._editor.getAction('editor.action.formatDocument')?.run();
                 } catch (e) {}
             }, 100);
+        } catch (e) {}
+    }
+}
+
+export function resizeEditor(container) {
+    if (container._editor) {
+        try {
+            container._editor.layout();
         } catch (e) {}
     }
 }

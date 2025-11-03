@@ -27,7 +27,7 @@
         </div>
     </div>
     <div class="card-body p-0">
-        <div @ref="_editorContainer" class="monaco-editor-container" style="@GetContainerStyle()"></div>
+        <div @ref="_editorContainer" class="monaco-editor-container @(_isAnimating ? "editor-fade-in" : "")" style="@GetContainerStyle()"></div>
     </div>
 </div>
 
@@ -36,7 +36,13 @@
         width: 100%;
         overflow: hidden;
         position: relative;
+        opacity: 0;
+        transition: opacity 0.4s ease-in-out;
     }
+
+        .monaco-editor-container.editor-fade-in {
+            opacity: 1;
+        }
 
     .fullscreen-card {
         position: fixed !important;
@@ -59,6 +65,23 @@
         .fullscreen-card .card-body {
             height: calc(100vh - 60px);
         }
+
+    /* Smooth content update animation */
+    @@keyframes contentUpdate {
+        0% {
+            opacity: 0.7;
+            transform: translateY(2px);
+        }
+
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .monaco-editor-container.content-updating {
+        animation: contentUpdate 0.3s ease-out;
+    }
 </style>
 
 @code {
@@ -79,6 +102,7 @@
     private bool _isFullScreen;
     private string _lastContent = string.Empty;
     private bool _initialized;
+    private bool _isAnimating;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -90,6 +114,10 @@
                 await _jsModule.InvokeVoidAsync("initializeMonacoEditor", _editorContainer, Content);
                 _lastContent = Content;
                 _initialized = true;
+
+                // Trigger fade-in animation
+                _isAnimating = true;
+                StateHasChanged();
             }
             catch (Exception ex)
             {
@@ -100,8 +128,16 @@
         {
             try
             {
+                // Trigger content update animation
+                _isAnimating = false;
+                StateHasChanged();
+                await Task.Delay(10);
+
                 await _jsModule!.InvokeVoidAsync("updateEditorContent", _editorContainer, Content);
                 _lastContent = Content;
+
+                _isAnimating = true;
+                StateHasChanged();
             }
             catch (Exception ex)
             {
