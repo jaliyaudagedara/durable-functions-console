@@ -39,8 +39,8 @@
                                     </div>
                                 </div>
                                 <div class="progress mt-3" style="height: 4px;">
-                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
-                                         role="progressbar" 
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                         role="progressbar"
                                          style="width: 100%"></div>
                                 </div>
                             </div>
@@ -57,10 +57,11 @@
                     {
                         <div class="mb-3">
                             <label class="form-label">Entity Name <span class="text-danger">*</span></label>
-                            <input type="text" 
-                                   class="form-control @(_validationError && string.IsNullOrWhiteSpace(_inputEntityName) ? "is-invalid" : "")" 
-                                   value="@_inputEntityName" 
-                                   @oninput="@((e) => { _inputEntityName = e.Value?.ToString() ?? string.Empty; _validationError = false; })"
+                            <input type="text"
+                                   class="form-control @(_validationError && string.IsNullOrWhiteSpace(_inputEntityName) ? "is-invalid" : "")"
+                                   @bind="_inputEntityName"
+                                   @bind:event="oninput"
+                                   @bind:after="OnEntityNameChanged"
                                    placeholder="Enter entity name" />
                             @if (_validationError && string.IsNullOrWhiteSpace(_inputEntityName))
                             {
@@ -69,10 +70,11 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Entity Key <span class="text-danger">*</span></label>
-                            <input type="text" 
-                                   class="form-control @(_validationError && string.IsNullOrWhiteSpace(_inputEntityKey) ? "is-invalid" : "")" 
-                                   value="@_inputEntityKey" 
-                                   @oninput="@((e) => { _inputEntityKey = e.Value?.ToString() ?? string.Empty; _validationError = false; })"
+                            <input type="text"
+                                   class="form-control @(_validationError && string.IsNullOrWhiteSpace(_inputEntityKey) ? "is-invalid" : "")"
+                                   @bind="_inputEntityKey"
+                                   @bind:event="oninput"
+                                   @bind:after="OnEntityKeyChanged"
                                    placeholder="Enter entity key" />
                             @if (_validationError && string.IsNullOrWhiteSpace(_inputEntityKey))
                             {
@@ -107,8 +109,8 @@
                             </div>
                         </div>
                         <div class="progress mt-3" style="height: 4px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
-                                 role="progressbar" 
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                 role="progressbar"
                                  style="width: 100%"></div>
                         </div>
                     </div>
@@ -131,7 +133,7 @@
 
     @if (!string.IsNullOrEmpty(_entityJsonResult) && !_isLoading)
     {
-        <EntityDetailViewer @key="@($"{_inputEntityName}_{_inputEntityKey}")" JsonContent="@_entityJsonResult" ShowQuickInfo="true" />
+        <EntityDetailViewer @key="@_entityResultKey" JsonContent="@_entityJsonResult" ShowQuickInfo="true" />
     }
 </div>
 
@@ -144,6 +146,7 @@
         0% {
             background-position: 1rem 0;
         }
+
         100% {
             background-position: 0 0;
         }
@@ -159,6 +162,7 @@
 
     private DurableFunctionConfiguration _configuration = new();
     private string _entityJsonResult = string.Empty;
+    private string _entityResultKey = string.Empty;
     private bool _isLoading;
     private string? _error;
     private string _inputEntityName = string.Empty;
@@ -192,6 +196,22 @@
         {
             _hasLoaded = true;
             await LoadEntityAsync();
+        }
+    }
+
+    private void OnEntityNameChanged()
+    {
+        if (_validationError)
+        {
+            _validationError = false;
+        }
+    }
+
+    private void OnEntityKeyChanged()
+    {
+        if (_validationError)
+        {
+            _validationError = false;
         }
     }
 
@@ -229,7 +249,7 @@
 
         _validationError = false;
         _hasLoaded = false;
-        
+
         // FORCE FULL PAGE RELOAD - this will completely reinitialize everything including Monaco
         NavigationManager.NavigateTo($"/entities/{Uri.EscapeDataString(_inputEntityName)}/{Uri.EscapeDataString(_inputEntityKey)}", forceLoad: true);
     }
@@ -241,18 +261,25 @@
         _isLoading = true;
         _error = null;
         _entityJsonResult = string.Empty;
-        StateHasChanged();
+
+        // Don't call StateHasChanged here - let Blazor handle it naturally
 
         try
         {
-            _entityJsonResult = await DurableFunctionService.GetEntityAsync(
+            var result = await DurableFunctionService.GetEntityAsync(
                 _configuration,
                 _inputEntityName,
                 _inputEntityKey);
 
-            if (string.IsNullOrEmpty(_entityJsonResult))
+            if (string.IsNullOrEmpty(result))
             {
                 _error = "Entity not found or no data returned";
+            }
+            else
+            {
+                _entityJsonResult = result;
+                // Update key only when content actually changes
+                _entityResultKey = $"{_inputEntityName}_{_inputEntityKey}_{DateTime.UtcNow.Ticks}";
             }
         }
         catch (HttpRequestException ex)
