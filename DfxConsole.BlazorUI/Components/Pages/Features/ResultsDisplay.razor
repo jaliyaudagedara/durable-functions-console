@@ -6,6 +6,7 @@
 @using DfxConsole.BlazorUI.Models
 @using DfxConsole.BlazorUI.Services
 @inject LocalStorageService LocalStorageService
+@inject TimeZoneService TimeZoneService
 @inject IJSRuntime JSRuntime
 
 @if (!string.IsNullOrEmpty(Result))
@@ -55,14 +56,14 @@
                                                 }
                                             </th>
                                             <th class="sortable" @onclick="() => SortInstances(InstanceSortColumn.CreatedTime)">
-                                                Created Time
+                                                Created Time (Local)
                                                 @if (_instanceSortColumn == InstanceSortColumn.CreatedTime)
                                                 {
                                                     <i class="bi bi-@(_instanceSortAscending ? "arrow-up" : "arrow-down")"></i>
                                                 }
                                             </th>
                                             <th class="sortable" @onclick="() => SortInstances(InstanceSortColumn.LastUpdatedTime)">
-                                                Last Updated
+                                                Last Updated (Local)
                                                 @if (_instanceSortColumn == InstanceSortColumn.LastUpdatedTime)
                                                 {
                                                     <i class="bi bi-@(_instanceSortAscending ? "arrow-up" : "arrow-down")"></i>
@@ -75,7 +76,7 @@
                                             <th>Entity Name</th>
                                             <th>Entity Key</th>
                                             <th class="sortable" @onclick="() => SortEntities()">
-                                                Last Operation Time
+                                                Last Operation Time (Local)
                                                 <i class="bi bi-@(_entitySortAscending ? "arrow-up" : "arrow-down")"></i>
                                             </th>
                                             <th>Actions</th>
@@ -355,6 +356,7 @@
     private ViewMode _viewMode = ViewMode.Table;
     private InstanceInfo? _selectedInstance = null;
     private EntityInfo? _selectedEntity = null;
+    private int _timezoneOffsetMinutes = 0; // Cached timezone offset
 
     // Sorting state for instances
     private InstanceSortColumn _instanceSortColumn = InstanceSortColumn.CreatedTime;
@@ -376,6 +378,17 @@
         Status,
         CreatedTime,
         LastUpdatedTime
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Get timezone offset once on first render (when JSRuntime is available)
+            _timezoneOffsetMinutes = await JSRuntime.InvokeAsync<int>("getTimezoneOffset");
+
+            StateHasChanged();
+        }
     }
 
     protected override void OnParametersSet()
@@ -528,12 +541,9 @@
             return "N/A";
         }
 
-        if (DateTime.TryParse(dateTime, out var dt))
-        {
-            return dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
-        }
+        DateTime localDateTime = TimeZoneService.ConvertUtcToLocal(dateTime.ToString(), _timezoneOffsetMinutes);
 
-        return dateTime;
+        return localDateTime.ToString("yyyy-MM-dd HH:mm:ss");
     }
 
     private string GetFullJson(object obj)

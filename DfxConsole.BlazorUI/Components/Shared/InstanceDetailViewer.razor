@@ -2,6 +2,9 @@
 @using DfxConsole.BlazorUI.Constants
 @using DfxConsole.BlazorUI.Models
 @using DfxConsole.BlazorUI.Components.Shared
+@using DfxConsole.BlazorUI.Services
+@inject IJSRuntime JSRuntime
+@inject TimeZoneService TimeZoneService
 
 @if (ShowQuickInfo)
 {
@@ -37,7 +40,7 @@
         <div class="col-md-3 col-sm-6 mb-3">
             <div class="card shadow-sm h-100">
                 <div class="card-body p-2">
-                    <h6 class="card-subtitle mb-2 fw-semibold" style="font-size: var(--font-size-sm); color: var(--text-primary);">Created</h6>
+                    <h6 class="card-subtitle mb-2 fw-semibold" style="font-size: var(--font-size-sm); color: var(--text-primary);">Created  (Local)</h6>
                     <p class="card-text mb-0" style="font-size: var(--font-size-base);">@FormatDateTime(_instance.CreatedTime)</p>
                 </div>
             </div>
@@ -69,6 +72,18 @@
 
     private InstanceInfo? _instance;
     private string _jsonResult = string.Empty;
+    private int _timezoneOffsetMinutes = 0; // Cached timezone offset
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Get timezone offset once on first render (when JSRuntime is available)
+            _timezoneOffsetMinutes = await JSRuntime.InvokeAsync<int>("getTimezoneOffset");
+
+            StateHasChanged();
+        }
+    }
 
     protected override void OnParametersSet()
     {
@@ -101,11 +116,8 @@
             return "N/A";
         }
 
-        if (DateTime.TryParse(dateTime, out var dt))
-        {
-            return dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
-        }
+        DateTime localDateTime = TimeZoneService.ConvertUtcToLocal(dateTime.ToString(), _timezoneOffsetMinutes);
 
-        return dateTime;
+        return localDateTime.ToString("yyyy-MM-dd HH:mm:ss");
     }
 }

@@ -7,6 +7,7 @@ namespace DfxConsole.BlazorUI.Services;
 public class DurableFunctionService
 {
     private readonly HttpClient _httpClient;
+    private readonly TimeZoneService _timeZoneService;
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -14,9 +15,10 @@ public class DurableFunctionService
         WriteIndented = true
     };
 
-    public DurableFunctionService(HttpClient httpClient)
+    public DurableFunctionService(HttpClient httpClient, TimeZoneService timeZoneService)
     {
         _httpClient = httpClient;
+        _timeZoneService = timeZoneService;
     }
 
     public async Task<PagedResponse<List<InstanceInfo>>> GetInstancesAsync(
@@ -38,11 +40,13 @@ public class DurableFunctionService
 
         if (createdTimeFrom.HasValue)
         {
-            queryParams["createdTimeFrom"] = createdTimeFrom.Value.ToUniversalTime().ToString("o");
+            DateTime utcTime = await _timeZoneService.ConvertLocalToUtcAsync(createdTimeFrom.Value);
+            queryParams["createdTimeFrom"] = utcTime.ToString("o");
         }
         if (createdTimeTo.HasValue)
         {
-            queryParams["createdTimeTo"] = createdTimeTo.Value.ToUniversalTime().ToString("o");
+            DateTime utcTime = await _timeZoneService.ConvertLocalToUtcAsync(createdTimeTo.Value);
+            queryParams["createdTimeTo"] = utcTime.ToString("o");
         }
         if (runtimeStatus?.Any() == true)
         {
@@ -115,11 +119,13 @@ public class DurableFunctionService
 
         if (createdTimeFrom.HasValue)
         {
-            queryParams["createdTimeFrom"] = createdTimeFrom.Value.ToUniversalTime().ToString("o");
+            DateTime utcTime = await _timeZoneService.ConvertLocalToUtcAsync(createdTimeFrom.Value);
+            queryParams["createdTimeFrom"] = utcTime.ToString("o");
         }
         if (createdTimeTo.HasValue)
         {
-            queryParams["createdTimeTo"] = createdTimeTo.Value.ToUniversalTime().ToString("o");
+            DateTime utcTime = await _timeZoneService.ConvertLocalToUtcAsync(createdTimeTo.Value);
+            queryParams["createdTimeTo"] = utcTime.ToString("o");
         }
         if (runtimeStatus?.Any() == true)
         {
@@ -203,11 +209,13 @@ public class DurableFunctionService
 
         if (lastOperationTimeFrom.HasValue)
         {
-            queryParams["lastOperationTimeFrom"] = lastOperationTimeFrom.Value.ToUniversalTime().ToString("o");
+            DateTime utcTime = await _timeZoneService.ConvertLocalToUtcAsync(lastOperationTimeFrom.Value);
+            queryParams["lastOperationTimeFrom"] = utcTime.ToString("o");
         }
         if (lastOperationTimeTo.HasValue)
         {
-            queryParams["lastOperationTimeTo"] = lastOperationTimeTo.Value.ToUniversalTime().ToString("o");
+            DateTime utcTime = await _timeZoneService.ConvertLocalToUtcAsync(lastOperationTimeTo.Value);
+            queryParams["lastOperationTimeTo"] = utcTime.ToString("o");
         }
         queryParams["fetchState"] = fetchState.ToString().ToLower();
         if (top.HasValue)
