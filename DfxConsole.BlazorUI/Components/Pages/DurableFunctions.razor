@@ -296,6 +296,7 @@
     private ResultType _currentResultType = ResultType.Instance;
     private int? _rowCount = null;
     private Timer? _autoSaveTimer;
+    private bool _firstRenderCompleted = false;
 
     // Custom headers management
     private List<CustomHeader> _customHeadersList = new();
@@ -315,16 +316,20 @@
         public string Value { get; set; } = string.Empty;
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
-        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-
-        await CheckAndHandleReloadFlag();
-
-        if (!_isReloading)
+        if (firstRender)
         {
-            await LoadConfiguration();
+            _firstRenderCompleted = true;
+
+            await CheckAndHandleReloadFlag();
+
+            if (!_isReloading)
+            {
+                await LoadConfiguration();
+            }
+
+            StateHasChanged();
         }
     }
 
@@ -379,11 +384,9 @@
                     // Clear the flag first to prevent infinite reload loop
                     await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", StorageKeys.IsHomePageNeedsReload);
 
-                    // Small delay to ensure the loading UI is rendered
-                    await Task.Delay(100);
-
                     // Reload the page
                     await JSRuntime.InvokeVoidAsync("location.reload");
+
                     return; // Exit early since we're reloading
                 }
             }
