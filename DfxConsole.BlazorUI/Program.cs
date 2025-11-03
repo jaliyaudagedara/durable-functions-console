@@ -7,6 +7,7 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddScoped<TimeZoneService>();
 builder.Services.AddHttpClient<DurableFunctionService>();
 builder.Services.AddSingleton<VersionService>();
 builder.Services.AddScoped<LocalStorageService>();
