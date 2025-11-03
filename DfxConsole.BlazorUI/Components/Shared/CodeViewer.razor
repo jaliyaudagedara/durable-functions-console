@@ -1,4 +1,5 @@
 @inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
 
 <div class="card shadow-sm">
     <div class="card-header @HeaderClass">
@@ -12,166 +13,256 @@
             </h5>
             <div class="d-flex gap-2">
                 @AdditionalHeaderContent
+                @if (ShowFullScreenButton)
+                {
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="ToggleFullScreen" title="Full Screen">
+                        <i class="bi bi-arrows-fullscreen"></i>
+                        Full Screen
+                    </button>
+                }
                 @if (ShowCopyButton)
                 {
                     <button class="btn btn-sm btn-outline-primary" @onclick="CopyToClipboard" disabled="@_isCopying">
                         <span class="bi bi-clipboard@(_copySuccess ? "-check" : "")"></span>
-                        @if (_isCopying)
-                        {
-                            <text>Copying...</text>
-                        }
-                        else if (_copySuccess)
-                        {
-                            <text>Copied!</text>
-                        }
-                        else
-                        {
-                            <text>Copy</text>
-                        }
+                        @(_isCopying ? "Copying..." : _copySuccess ? "Copied!" : "Copy")
                     </button>
                 }
             </div>
         </div>
     </div>
     <div class="card-body p-0">
-        <div class="code-viewer-container" style="@GetContainerStyle()">
-            <pre class="m-0"><code class="@LanguageClass">@Content</code></pre>
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert alert-danger m-2" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                @_errorMessage
+            </div>
+        }
+        <div @ref="_codeContainer" class="code-viewer-container" style="@GetContainerStyle()">
+            <pre class="line-numbers m-0"><code class="language-json">@Content</code></pre>
         </div>
     </div>
 </div>
 
+@if (_isFullScreen)
+{
+    <div class="fullscreen-overlay" @onclick="CloseFullScreen">
+        <div class="fullscreen-modal" @onclick:stopPropagation="true">
+            <div class="fullscreen-header">
+                <h4 class="mb-0 text-white">
+                    @if (!string.IsNullOrEmpty(Icon))
+                    {
+                        <i class="bi bi-@Icon me-2"></i>
+                    }
+                    JSON - Full Screen
+                </h4>
+                <div class="d-flex gap-2">
+                    @if (ShowCopyButton)
+                    {
+                        <button class="btn btn-sm btn-outline-light" @onclick="CopyToClipboard" disabled="@_isCopying">
+                            <span class="bi bi-clipboard@(_copySuccess ? "-check" : "")"></span>
+                            @(_isCopying ? "Copying..." : _copySuccess ? "Copied!" : "Copy")
+                        </button>
+                    }
+                    <button class="btn btn-sm btn-outline-light" @onclick="CloseFullScreen" title="Close">
+                        <i class="bi bi-x-lg"></i>
+                        Close
+                    </button>
+                </div>
+            </div>
+            <div class="fullscreen-body">
+                <div @ref="_fullScreenCodeContainer" class="code-viewer-container" style="height: 100%; max-height: none;">
+                    <pre class="line-numbers m-0"><code class="language-json">@Content</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <style>
     .code-viewer-container {
+        width: 100%;
         overflow: auto;
-        background-color: #1e1e1e;
-        max-width: 100%;
-        position: relative;
+        background: #2d2d2d;
     }
 
-    .code-viewer-container pre {
-        background-color: #1e1e1e;
-        color: #d4d4d4;
-        padding: 12px;
-        margin: 0;
-        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-        font-size: 14px;
-        line-height: 1.5;
-        white-space: pre-wrap;
-        word-wrap: break-word;
+        .code-viewer-container pre {
+            margin: 0;
+            padding: 1rem;
+            background: #2d2d2d;
+            border-radius: 0;
+        }
+
+        .code-viewer-container code {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+    .fullscreen-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+        animation: fadeIn 0.2s ease-in;
     }
 
-    .code-viewer-container code {
-        background-color: transparent;
-        color: inherit;
-        padding: 0;
+    @@keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
 
-    @@media (max-width: 991.98px) {
-        .code-viewer-container {
-            max-height: 500px;
+    .fullscreen-modal {
+        width: 95vw;
+        height: 95vh;
+        background: #1e1e1e;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        animation: slideIn 0.2s ease-out;
+    }
+
+    @@keyframes slideIn {
+        from {
+            transform: scale(0.95);
+            opacity: 0;
+        }
+        to {
+            transform: scale(1);
+            opacity: 1;
         }
     }
+
+    .fullscreen-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        background: #2d2d2d;
+        border-bottom: 1px solid #444;
+        border-radius: 8px 8px 0 0;
+    }
+
+        .fullscreen-header h4 {
+            color: #ffffff !important;
+            font-weight: 500;
+        }
+
+        .fullscreen-header i {
+            color: #ffffff !important;
+        }
+
+    .fullscreen-body {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+        .fullscreen-body .code-viewer-container {
+            flex: 1;
+            border-radius: 0 0 8px 8px;
+        }
 </style>
 
 @code {
-    /// <summary>
-    /// The content to display in the code viewer
-    /// </summary>
-    [Parameter, EditorRequired]
-    public string Content { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Content { get; set; } = string.Empty;
+    [Parameter] public string Icon { get; set; } = "file-earmark-code";
+    [Parameter] public string HeaderClass { get; set; } = "";
+    [Parameter] public string LanguageClass { get; set; } = string.Empty;
+    [Parameter] public bool ShowCopyButton { get; set; } = true;
+    [Parameter] public bool ShowFullScreenButton { get; set; } = true;
+    [Parameter] public string MaxHeight { get; set; } = "calc(100vh - 400px)";
+    [Parameter] public string MinHeight { get; set; } = "300px";
+    [Parameter] public RenderFragment? AdditionalHeaderContent { get; set; }
+    [Parameter] public EventCallback<bool> OnCopyComplete { get; set; }
 
-    /// <summary>
-    /// Bootstrap icon name (without 'bi-' prefix)
-    /// </summary>
-    [Parameter]
-    public string Icon { get; set; } = "file-earmark-code";
+    private ElementReference _codeContainer;
+    private ElementReference _fullScreenCodeContainer;
+    private bool _isCopying;
+    private bool _copySuccess;
+    private bool _isFullScreen;
+    private bool _fullScreenJustOpened;
+    private string _lastContent = string.Empty;
+    private string _errorMessage = string.Empty;
 
-    /// <summary>
-    /// CSS class for the card header (e.g., "bg-info text-white")
-    /// </summary>
-    [Parameter]
-    public string HeaderClass { get; set; } = "";
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var contentChanged = _lastContent != Content;
 
-    /// <summary>
-    /// Language class for syntax highlighting (e.g., "language-json", "language-csharp")
-    /// </summary>
-    [Parameter]
-    public string LanguageClass { get; set; } = string.Empty;
+        if (firstRender || contentChanged)
+        {
+            _lastContent = Content;
+            _errorMessage = string.Empty;
+        }
 
-    /// <summary>
-    /// Whether to show the copy to clipboard button
-    /// </summary>
-    [Parameter]
-    public bool ShowCopyButton { get; set; } = true;
+        try
+        {
+            // Highlight normal view on first render or content change
+            if ((firstRender || contentChanged) && !_isFullScreen)
+            {
+                await JSRuntime.InvokeVoidAsync("Prism.highlightAllUnder", _codeContainer);
+            }
 
-    /// <summary>
-    /// Maximum height of the code container (e.g., "500px", "calc(100vh - 400px)")
-    /// </summary>
-    [Parameter]
-    public string MaxHeight { get; set; } = "calc(100vh - 400px)";
-
-    /// <summary>
-    /// Minimum height of the code container
-    /// </summary>
-    [Parameter]
-    public string MinHeight { get; set; } = "300px";
-
-    /// <summary>
-    /// Additional content to render in the header (e.g., buttons, badges)
-    /// </summary>
-    [Parameter]
-    public RenderFragment? AdditionalHeaderContent { get; set; }
-
-    /// <summary>
-    /// Event callback triggered when copy operation completes successfully
-    /// </summary>
-    [Parameter]
-    public EventCallback<bool> OnCopyComplete { get; set; }
-
-    private bool _isCopying = false;
-    private bool _copySuccess = false;
+            // Highlight fullscreen view immediately when it opens or content changes
+            if (_isFullScreen && (_fullScreenJustOpened || contentChanged))
+            {
+                _fullScreenJustOpened = false;
+                await JSRuntime.InvokeVoidAsync("Prism.highlightAllUnder", _fullScreenCodeContainer);
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error highlighting syntax: {ex.Message}";
+            StateHasChanged();
+        }
+    }
 
     private async Task CopyToClipboard()
     {
-        if (string.IsNullOrEmpty(Content))
-        {
-            return;
-        }
-
+        if (string.IsNullOrEmpty(Content)) return;
         _isCopying = true;
-        _copySuccess = false;
         StateHasChanged();
 
         try
         {
             var success = await JSRuntime.InvokeAsync<bool>("clipboardInterop.copyToClipboard", Content);
             _copySuccess = success;
-
             if (success)
             {
                 await OnCopyComplete.InvokeAsync(true);
-
-                _ = Task.Delay(2000).ContinueWith(_ =>
-                {
-                    _copySuccess = false;
-                    InvokeAsync(StateHasChanged);
-                });
+                _ = Task.Delay(2000).ContinueWith(_ => { _copySuccess = false; InvokeAsync(StateHasChanged); });
             }
         }
-        catch (Exception)
-        {
-            _copySuccess = false;
-            await OnCopyComplete.InvokeAsync(false);
-        }
-        finally
-        {
-            _isCopying = false;
-            StateHasChanged();
-        }
+        catch { _copySuccess = false; }
+        finally { _isCopying = false; StateHasChanged(); }
     }
 
-    private string GetContainerStyle()
+    private void ToggleFullScreen()
     {
-        return $"max-height: {MaxHeight}; min-height: {MinHeight};";
+        _isFullScreen = !_isFullScreen;
+        _fullScreenJustOpened = _isFullScreen;
+        StateHasChanged();
+    }
+
+    private void CloseFullScreen()
+    {
+        _isFullScreen = false;
+        StateHasChanged();
+    }
+
+    private string GetContainerStyle() => $"height: {(MaxHeight.Contains("calc") ? MaxHeight : MinHeight)}; max-height: {MaxHeight}; min-height: {MinHeight};";
+
+    public async ValueTask DisposeAsync()
+    {
+        await Task.CompletedTask;
     }
 }
