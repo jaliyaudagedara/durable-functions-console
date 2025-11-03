@@ -7,7 +7,6 @@ on:
     paths-ignore:
       - 'README.md'
       - '*.md'
-      - 'docs/**'
   issue_comment:
     types: [created]
   workflow_dispatch:
@@ -19,10 +18,15 @@ jobs:
   check-comment:
     if: github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '/build')
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
     outputs:
       should-build: ${{ steps.check.outputs.result }}
       pr-ref: ${{ steps.pr.outputs.ref }}
       pr-sha: ${{ steps.pr.outputs.sha }}
+      pr-number: ${{ github.event.issue.number }}
     steps:
       - name: Check if commenter is authorized
         id: check_auth
@@ -83,6 +87,8 @@ jobs:
     permissions:
       contents: write
       packages: write
+      issues: write
+      pull-requests: write
 
     steps:
       - name: Checkout repository
@@ -168,11 +174,12 @@ jobs:
         if: github.event_name == 'issue_comment'
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              issue_number: ${{ needs.check-comment.outputs.pr-number }},
               body: `✅ Docker image built and pushed successfully!\n\n**Image:** \`${{ env.IMAGE_NAME }}:${{ steps.semver.outputs.FULL_VERSION }}\``
             });
 
@@ -180,11 +187,16 @@ jobs:
       image-tag: ${{ steps.semver.outputs.FULL_VERSION }}
       timestamp: ${{ steps.semver.outputs.TIMESTAMP }}
       is-pr: ${{ steps.semver.outputs.IS_PR }}
+      pr-number: ${{ needs.check-comment.outputs.pr-number }}
 
   deploy-dev:
     needs: build-and-push
     if: needs.build-and-push.outputs.is-pr == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
     environment:
       name: development
       url: ${{ steps.deploy.outputs.webapp-url }}
@@ -208,11 +220,12 @@ jobs:
       - name: Comment deployment success
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              issue_number: ${{ needs.build-and-push.outputs.pr-number }},
               body: `🚀 Successfully deployed to Development environment!\n\n**Image:** \`${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image-tag }}\`\n**URL:** ${{ steps.deploy.outputs.webapp-url }}`
             });
 
