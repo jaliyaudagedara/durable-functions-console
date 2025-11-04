@@ -11,8 +11,8 @@ Durable Functions Console is compatible with:
 
 ## Hosted Environments
 
-We maintain two hosted environments, one for development and one for production. Upon functionality is tested 
-and verified in the `Development` environment, it will get deployed to the `Production` environment.
+We maintain two hosted environments, one for development and one for production. PRs can be tested in `Development` environment. 
+Once merged to main, it will get deployed to `Production` environment.
 
 | Environment | URL                                 |
 |-------------|-------------------------------------|
@@ -32,4 +32,4 @@ docker run -d -p 8080:8080 jaliyaudagedara/durable-functions-console:<tag>
 
 ## Acknowledgements
 
-Developed with great assistance from **GitHub Copilot**.
+Vibe coded using **GitHub Copilot**.
