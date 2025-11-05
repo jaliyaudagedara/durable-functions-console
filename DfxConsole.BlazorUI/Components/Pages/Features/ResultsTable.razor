@@ -1,0 +1,314 @@
+@using System.Text.Json
+@using DfxConsole.BlazorUI.Components.Constants
+@using DfxConsole.BlazorUI.Components.Pages.Features
+@using DfxConsole.BlazorUI.Components.Shared
+@using DfxConsole.BlazorUI.Constants
+@using DfxConsole.BlazorUI.Models
+@using DfxConsole.BlazorUI.Services
+@inject LocalStorageService LocalStorageService
+@inject TimeZoneService TimeZoneService
+@inject IJSRuntime JSRuntime
+
+@if (!string.IsNullOrEmpty(Result))
+{
+    <div class="row">
+        <div class="col-12">
+            @if (_isSwitchingView)
+            {
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-table me-2"></i>RESULTS
+                        </h5>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="d-flex align-items-center justify-content-center" style="min-height: 200px;">
+                            <div class="text-center">
+                                <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p class="text-muted mb-0">Loading table view...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (_viewMode == ViewMode.Table && CanShowTableView)
+            {
+                <div class="card shadow-sm">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="bi bi-table me-2"></i>RESULTS
+                                @if (RowCount.HasValue)
+                                {
+                                    <span class="badge bg-primary text-white ms-2">@RowCount.Value @(RowCount.Value == 1 ? "row" : "rows")</span>
+                                }
+                            </h5>
+                            <div class="d-flex gap-2">
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-sm @(_viewMode == ViewMode.Table ? "btn-primary" : "btn-outline-secondary")"
+                                            @onclick="SwitchToTableView"
+                                            disabled="@_isSwitchingView">
+                                        <span class="bi bi-table"></span> Table
+                                    </button>
+                                    <button class="btn btn-sm @(_viewMode == ViewMode.Json ? "btn-primary" : "btn-outline-secondary")"
+                                            @onclick="SwitchToJsonView"
+                                            disabled="@_isSwitchingView">
+                                        <span class="bi bi-code"></span> JSON
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (CurrentResultType == ResultType.Instance)
+                        {
+                            <InstancesTable @key="@("instances-table")"
+                                            Instances="@Instances"
+                                            OnShowDetails="@ShowInstanceDetails"
+                                            TimezoneOffsetMinutes="@_timezoneOffsetMinutes" />
+                        }
+                        else
+                        {
+                            <EntitiesTable @key="@("entities-table")"
+                                           Entities="@Entities"
+                                           OnShowDetails="@ShowEntityDetails"
+                                           TimezoneOffsetMinutes="@_timezoneOffsetMinutes" />
+                        }
+                    </div>
+                    @if (SupportsPagination && (HasPreviousPage || HasNextPage))
+                    {
+                        <div class="card-footer d-flex justify-content-between align-items-center">
+                            <button class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => OnLoadPreviousPage.InvokeAsync()"
+                                    disabled="@(!HasPreviousPage || IsLoading)">
+                                <span class="bi bi-chevron-left"></span> Previous
+                            </button>
+                            <span class="text-muted">Page @(CurrentPageIndex + 1)</span>
+                            <button class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => OnLoadNextPage.InvokeAsync()"
+                                    disabled="@(!HasNextPage || IsLoading)">
+                                Next <span class="bi bi-chevron-right"></span>
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <CodeViewer Content="@Result"
+                            Icon="table"
+                            HeaderClass=""
+                            LanguageClass="language-json"
+                            MaxHeight="calc(100vh - 400px)"
+                            MinHeight="150px"
+                            ShowCopyButton="true">
+                    <AdditionalHeaderContent>
+                        @if (CanShowTableView)
+                        {
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-sm @(_viewMode == ViewMode.Table ? "btn-primary" : "btn-outline-secondary")"
+                                        @onclick="SwitchToTableView"
+                                        disabled="@_isSwitchingView">
+                                    <span class="bi bi-table"></span> Table
+                                </button>
+                                <button class="btn btn-sm @(_viewMode == ViewMode.Json ? "btn-primary" : "btn-outline-secondary")"
+                                        @onclick="SwitchToJsonView"
+                                        disabled="@_isSwitchingView">
+                                    <span class="bi bi-code"></span> JSON
+                                </button>
+                            </div>
+                        }
+                    </AdditionalHeaderContent>
+                </CodeViewer>
+                @if (SupportsPagination && (HasPreviousPage || HasNextPage))
+                {
+                    <div class="card shadow-sm mt-2">
+                        <div class="card-footer d-flex justify-content-between align-items-center">
+                            <button class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => OnLoadPreviousPage.InvokeAsync()"
+                                    disabled="@(!HasPreviousPage || IsLoading)">
+                                <span class="bi bi-chevron-left"></span> Previous
+                            </button>
+                            <span class="text-muted">Page @(CurrentPageIndex + 1)</span>
+                            <button class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => OnLoadNextPage.InvokeAsync()"
+                                    disabled="@(!HasNextPage || IsLoading)">
+                                Next <span class="bi bi-chevron-right"></span>
+                            </button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+
+@if (_selectedInstance != null)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-diagram-3-fill me-2"></i>INSTANCE
+                        <span class="badge bg-primary text-white ms-2 font-monospace">@_selectedInstance.InstanceId</span>
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseInstanceDetails"></button>
+                </div>
+                <div class="modal-body">
+                    <InstanceDetailViewer @key="@_selectedInstance.InstanceId" Instance="@_selectedInstance" ShowQuickInfo="true" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseInstanceDetails">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_selectedEntity != null)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-box-fill me-2"></i>ENTITY
+                        <span class="badge bg-primary text-white ms-2">@_selectedEntity.EntityId.Name</span>
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseEntityDetails"></button>
+                </div>
+                <div class="modal-body">
+                    <EntityDetailViewer @key="@($"{_selectedEntity.EntityId.Name}_{_selectedEntity.EntityId.Key}")" Entity="@_selectedEntity" ShowQuickInfo="true" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseEntityDetails">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-backdrop {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        z-index: 1040 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background-color: rgba(0, 0, 0, 0.5) !important;
+        opacity: 1 !important;
+    }
+
+    .modal {
+        position: fixed !important;
+        z-index: 1050 !important;
+    }
+
+    .modal-header {
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+    }
+</style>
+
+@code {
+    [Parameter] public string Result { get; set; } = string.Empty;
+    [Parameter] public bool CanShowTableView { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public ResultType CurrentResultType { get; set; }
+    [Parameter] public List<InstanceInfo> Instances { get; set; } = new();
+    [Parameter] public List<EntityInfo> Entities { get; set; } = new();
+    [Parameter] public bool SupportsPagination { get; set; }
+    [Parameter] public bool HasPreviousPage { get; set; }
+    [Parameter] public bool HasNextPage { get; set; }
+    [Parameter] public int CurrentPageIndex { get; set; }
+    [Parameter] public int? RowCount { get; set; }
+    [Parameter] public EventCallback OnLoadPreviousPage { get; set; }
+    [Parameter] public EventCallback OnLoadNextPage { get; set; }
+
+    private ViewMode _viewMode = ViewMode.Table;
+    private InstanceInfo? _selectedInstance = null;
+    private EntityInfo? _selectedEntity = null;
+    private int _timezoneOffsetMinutes = 0; // Cached timezone offset
+    private bool _isSwitchingView = false;
+
+    public enum ViewMode
+    {
+        Table,
+        Json
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Get timezone offset once on first render (when JSRuntime is available)
+            _timezoneOffsetMinutes = await JSRuntime.InvokeAsync<int>("getTimezoneOffset");
+
+            StateHasChanged();
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+
+        // Always reset to Table view on render
+        _viewMode = ViewMode.Table;
+    }
+
+    private void ShowInstanceDetails(InstanceInfo instance)
+    {
+        _selectedInstance = instance;
+    }
+
+    private void ShowEntityDetails(EntityInfo entity)
+    {
+        _selectedEntity = entity;
+    }
+
+    private void CloseInstanceDetails()
+    {
+        _selectedInstance = null;
+    }
+
+    private void CloseEntityDetails()
+    {
+        _selectedEntity = null;
+    }
+
+    private async Task SwitchToTableView()
+    {
+        if (_viewMode == ViewMode.Table || _isSwitchingView)
+            return;
+
+        _isSwitchingView = true;
+        StateHasChanged();
+
+        // Allow UI to update with loading indicator
+        await Task.Yield();
+
+        _viewMode = ViewMode.Table;
+        _isSwitchingView = false;
+    }
+
+    private async Task SwitchToJsonView()
+    {
+        if (_viewMode == ViewMode.Json || _isSwitchingView)
+            return;
+
+        _isSwitchingView = true;
+        StateHasChanged();
+
+        // Allow UI to update with loading indicator
+        await Task.Yield();
+
+        _viewMode = ViewMode.Json;
+        _isSwitchingView = false;
+    }
+}

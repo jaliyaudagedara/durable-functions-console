@@ -1,0 +1,171 @@
+@using DfxConsole.BlazorUI.Models
+@using DfxConsole.BlazorUI.Services
+@inject TimeZoneService TimeZoneService
+@inject IJSRuntime JSRuntime
+
+<div class="table-responsive result-container">
+    <table class="table table-hover mb-0">
+        <thead class="table-light sticky-top">
+            <tr>
+                <th>Entity Name</th>
+                <th>Entity Key</th>
+                <th class="sortable" @onclick="ToggleSort">
+                    Last Operation Time (Local)
+                    <i class="bi bi-@(SortAscending ? "arrow-up" : "arrow-down")"></i>
+                </th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var entity in SortedEntities)
+            {
+                <tr>
+                    <td title="@entity.EntityId.Name">
+                        @entity.EntityId.Name
+                    </td>
+                    <td title="@entity.EntityId.Key">
+                        @entity.EntityId.Key
+                    </td>
+                    <td class="text-nowrap">@FormatDateTime(entity.LastOperationTime)</td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => OnShowDetails.InvokeAsync(entity)"
+                                    title="View details in popup">
+                                <span class="bi bi-eye"></span> Details
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    @onclick="() => OpenEntityInNewTab(entity.EntityId.Name, entity.EntityId.Key)"
+                                    title="Open in new tab">
+                                <span class="bi bi-box-arrow-up-right"></span>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<style>
+    .table-responsive {
+        background-color: white;
+    }
+
+    .result-container {
+        max-height: calc(100vh - 400px);
+        min-height: 150px;
+        overflow: auto;
+        background-color: white;
+    }
+
+        .result-container table {
+            font-size: var(--font-size-base);
+            table-layout: auto;
+            white-space: nowrap;
+        }
+
+            .result-container table th {
+                font-size: var(--font-size-base);
+                padding: 0.5rem 0.75rem;
+                white-space: nowrap;
+            }
+
+            .result-container table td {
+                font-size: var(--font-size-base);
+                padding: 0.5rem 0.75rem;
+            }
+
+    .sticky-top {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .sortable {
+        cursor: pointer;
+        user-select: none;
+    }
+
+        .sortable:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+    @@media (max-width: 991.98px) {
+        .result-container {
+            max-height: 400px;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public List<EntityInfo> Entities { get; set; } = new();
+    [Parameter] public EventCallback<EntityInfo> OnShowDetails { get; set; }
+    [Parameter] public int TimezoneOffsetMinutes { get; set; }
+
+    private bool SortAscending { get; set; } = true;
+    private List<EntityInfo> SortedEntities { get; set; } = new();
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        ApplySort();
+    }
+
+    private void ToggleSort()
+    {
+        SortAscending = !SortAscending;
+        ApplySort();
+    }
+
+    private void ApplySort()
+    {
+        if (Entities == null || !Entities.Any())
+        {
+            SortedEntities = new List<EntityInfo>();
+            return;
+        }
+
+        SortedEntities = SortAscending
+            ? Entities.OrderBy(e => ParseDateTime(e.LastOperationTime) ?? DateTime.MaxValue).ToList()
+            : Entities.OrderByDescending(e => ParseDateTime(e.LastOperationTime) ?? DateTime.MinValue).ToList();
+    }
+
+    private DateTime? ParseDateTime(string? dateTime)
+    {
+        if (string.IsNullOrEmpty(dateTime))
+        {
+            return null;
+        }
+
+        if (DateTime.TryParse(dateTime, out var dt))
+        {
+            return dt;
+        }
+
+        return null;
+    }
+
+    private string FormatDateTime(string? dateTime)
+    {
+        if (string.IsNullOrEmpty(dateTime))
+        {
+            return "N/A";
+        }
+
+        DateTime localDateTime = TimeZoneService.ConvertUtcToLocal(dateTime.ToString(), TimezoneOffsetMinutes);
+
+        return localDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private async Task OpenEntityInNewTab(string entityName, string entityKey)
+    {
+        if (string.IsNullOrWhiteSpace(entityName) || string.IsNullOrWhiteSpace(entityKey))
+        {
+            return;
+        }
+
+        var url = $"/entities/{Uri.EscapeDataString(entityName)}/{Uri.EscapeDataString(entityKey)}?needsReload=true";
+        await JSRuntime.InvokeVoidAsync("window.open", url, "_blank");
+    }
+}
