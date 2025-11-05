@@ -1,0 +1,140 @@
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+<div class="datetime-picker-wrapper">
+    <label class="form-label">
+        @Label
+        @if (Required)
+        {
+            <span class="text-danger">*</span>
+        }
+    </label>
+    <div class="input-group">
+        <span class="input-group-text">
+            <i class="bi bi-calendar3"></i>
+        </span>
+        <input @ref="_inputElement"
+               type="text"
+               class="form-control"
+               placeholder="@Placeholder"
+               readonly />
+        @if (Value.HasValue)
+        {
+            <button class="btn btn-outline-secondary" type="button" @onclick="Clear" title="Clear">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        }
+    </div>
+</div>
+
+<style>
+    .datetime-picker-wrapper {
+        width: 100%;
+    }
+
+    .datetime-picker-wrapper .input-group-text {
+        background-color: #e9ecef;
+        border-right: none;
+    }
+
+    .datetime-picker-wrapper .form-control {
+        border-left: none;
+        cursor: pointer;
+        background-color: white;
+    }
+
+    .datetime-picker-wrapper .form-control:focus {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    .datetime-picker-wrapper .btn-outline-secondary {
+        border-color: #ced4da;
+    }
+
+    .datetime-picker-wrapper .btn-outline-secondary:hover {
+        background-color: #dc3545;
+        border-color: #dc3545;
+        color: white;
+    }
+</style>
+
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public DateTime? Value { get; set; }
+    [Parameter] public EventCallback<DateTime?> ValueChanged { get; set; }
+    [Parameter] public bool Required { get; set; } = false;
+    [Parameter] public string Placeholder { get; set; } = "Select date and time...";
+    [Parameter] public bool EnableTime { get; set; } = true;
+
+    private ElementReference _inputElement;
+    private IJSObjectReference? _jsModule;
+    private DotNetObjectReference<DateTimePicker>? _dotNetRef;
+    private bool _initialized = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                _dotNetRef = DotNetObjectReference.Create(this);
+                _jsModule = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/dateTimePicker.js");
+                await _jsModule.InvokeVoidAsync("initializeDateTimePicker", _inputElement, _dotNetRef, EnableTime, Value);
+                _initialized = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing DateTimePicker: {ex.Message}");
+            }
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnDateChanged(string? dateString)
+    {
+        if (string.IsNullOrEmpty(dateString))
+        {
+            Value = null;
+        }
+        else if (DateTime.TryParse(dateString, out var date))
+        {
+            Value = date;
+        }
+
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    private async Task Clear()
+    {
+        Value = null;
+        await ValueChanged.InvokeAsync(Value);
+
+        if (_jsModule != null && _initialized)
+        {
+            try
+            {
+                await _jsModule.InvokeVoidAsync("clearDateTimePicker", _inputElement);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error clearing DateTimePicker: {ex.Message}");
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_jsModule != null)
+        {
+            try
+            {
+                await _jsModule.InvokeVoidAsync("destroyDateTimePicker", _inputElement);
+                await _jsModule.DisposeAsync();
+            }
+            catch { }
+        }
+
+        _dotNetRef?.Dispose();
+    }
+}

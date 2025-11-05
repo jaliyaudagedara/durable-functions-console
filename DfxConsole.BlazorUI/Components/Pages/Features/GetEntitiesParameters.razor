@@ -1,3 +1,5 @@
+@using DfxConsole.BlazorUI.Components.Shared
+
 <div class="row">
     <div class="col-md-6 mb-3">
         <label class="form-label">Entity Name</label>
@@ -10,14 +12,19 @@
         </div>
     </div>
 </div>
+
 <div class="row">
     <div class="col-md-6 mb-3">
-        <label class="form-label">Last Operation Time From (Local)</label>
-        <input type="datetime-local" class="form-control" @bind="_lastOperationTimeFrom" />
+        <DateTimePicker Label="Last Operation Time From (Local)"
+                        Value="@_lastOperationTimeFrom"
+                        ValueChanged="@((DateTime? value) => _lastOperationTimeFrom = value)"
+                        Placeholder="Select start date and time..." />
     </div>
     <div class="col-md-6 mb-3">
-        <label class="form-label">Last Operation Time To (Local)</label>
-        <input type="datetime-local" class="form-control" @bind="_lastOperationTimeTo" />
+        <DateTimePicker Label="Last Operation Time To (Local)"
+                        Value="@_lastOperationTimeTo"
+                        ValueChanged="@((DateTime? value) => _lastOperationTimeTo = value)"
+                        Placeholder="Select end date and time..." />
     </div>
 </div>
 <div class="mb-3">
