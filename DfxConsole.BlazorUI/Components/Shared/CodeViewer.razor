@@ -13,6 +13,13 @@
             </h5>
             <div class="d-flex gap-2">
                 @AdditionalHeaderContent
+                @if (_showReloadButton)
+                {
+                    <button class="btn btn-sm btn-outline-warning" @onclick="ReloadMonacoEditor" disabled="@_isReloading" title="Styles missing. Click to reload.">
+                        <i class="bi bi-@(_isReloading ? "arrow-clockwise spin" : "exclamation-triangle") me-1"></i>
+                        @(_isReloading ? "Reloading..." : "Fix Styles")
+                    </button>
+                }
                 <button class="btn btn-sm @(_isFullScreen ? "btn-primary" : "btn-outline-secondary") fullscreen-toggle-btn"
                         @onclick="ToggleFullScreen"
                         title="@(_isFullScreen ? "Exit Full Screen (Esc)" : "Full Screen (F11)")">
@@ -30,6 +37,15 @@
         </div>
     </div>
     <div class="card-body p-0">
+        @if (_isInitializing)
+        {
+            <div class="monaco-loading-overlay" style="@GetContainerStyle()">
+                <div class="spinner-border text-light" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-light mt-2">Loading JSON view...</p>
+            </div>
+        }
         <div @ref="_editorContainer" class="monaco-editor-container" style="@GetContainerStyle()"></div>
     </div>
 </div>
@@ -39,6 +55,19 @@
         width: 100%;
         overflow: hidden;
         position: relative;
+    }
+
+    .monaco-loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background: #1e1e1e;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
     }
 
     .fullscreen-card {
@@ -92,6 +121,20 @@
             box-shadow: 0 0 0 4px rgba(13, 110, 253, 0);
         }
     }
+
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        from {
+            transform: rotate(0deg);
+        }
+
+        to {
+            transform: rotate(360deg);
+        }
+    }
 </style>
 
 @code {
@@ -112,22 +155,38 @@
     private bool _isFullScreen;
     private string _lastContent = string.Empty;
     private bool _initialized;
+    private bool _isInitializing;
+    private bool _showReloadButton;
+    private bool _isReloading;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && !_initialized)
         {
+            _isInitializing = true;
+            StateHasChanged();
+
             try
             {
                 _jsModule = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/monacoEditor.js");
                 await _jsModule.InvokeVoidAsync("initializeMonacoEditor", _editorContainer, Content);
                 _lastContent = Content;
                 _initialized = true;
-                StateHasChanged();
+
+                // Check if Monaco CSS is missing and show reload button if needed
+                await CheckMonacoStyles();
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error initializing Monaco: {ex.Message}");
+                // Even on error, mark as initialized to prevent retry loops
+                _initialized = true;
+                _showReloadButton = true; // Show reload button on error
+            }
+            finally
+            {
+                _isInitializing = false;
+                StateHasChanged();
             }
         }
         else if (_initialized && _lastContent != Content)
@@ -141,6 +200,33 @@
             {
                 Console.WriteLine($"Error updating Monaco: {ex.Message}");
             }
+        }
+    }
+
+    private async Task CheckMonacoStyles()
+    {
+        try
+        {
+            // Check if Monaco CSS is applied
+            var hasStyles = await JSRuntime.InvokeAsync<bool>("eval",
+                @"(() => {
+                    const container = document.querySelector('.monaco-editor');
+                    if (!container) return false;
+                    const styles = window.getComputedStyle(container);
+                    return styles.position === 'relative' || styles.overflow === 'hidden';
+                })()");
+
+            _showReloadButton = !hasStyles;
+
+            if (_showReloadButton)
+            {
+                Console.WriteLine("Monaco CSS missing - showing reload button");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error checking Monaco styles: {ex.Message}");
+            _showReloadButton = true;
         }
     }
 
@@ -183,6 +269,52 @@
         }
         catch { _copySuccess = false; }
         finally { _isCopying = false; StateHasChanged(); }
+    }
+
+    private async Task ReloadMonacoEditor()
+    {
+        if (_isReloading || _jsModule == null)
+            return;
+
+        _isReloading = true;
+        StateHasChanged();
+
+        try
+        {
+            Console.WriteLine("Reloading Monaco editor...");
+
+            // Dispose existing editor
+            await _jsModule.InvokeVoidAsync("disposeEditorSync", _editorContainer);
+
+            // Wait a moment
+            await Task.Delay(200);
+
+            // Reinitialize
+            await _jsModule.InvokeVoidAsync("initializeMonacoEditor", _editorContainer, Content);
+
+            // Check if it worked
+            await Task.Delay(500);
+            await CheckMonacoStyles();
+
+            if (!_showReloadButton)
+            {
+                Console.WriteLine("Monaco editor reloaded successfully");
+            }
+            else
+            {
+                Console.WriteLine("Monaco editor still has issues after reload");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error reloading Monaco: {ex.Message}");
+            _showReloadButton = true;
+        }
+        finally
+        {
+            _isReloading = false;
+            StateHasChanged();
+        }
     }
 
     private string GetContainerStyle()

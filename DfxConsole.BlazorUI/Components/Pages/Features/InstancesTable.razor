@@ -1,0 +1,234 @@
+@using DfxConsole.BlazorUI.Constants
+@using DfxConsole.BlazorUI.Models
+@using DfxConsole.BlazorUI.Services
+@inject TimeZoneService TimeZoneService
+@inject IJSRuntime JSRuntime
+
+<div class="table-responsive result-container">
+    <table class="table table-hover mb-0">
+        <thead class="table-light sticky-top">
+            <tr>
+                <th>Instance ID</th>
+                <th>Name</th>
+                <th class="sortable" @onclick="() => OnSort(InstanceSortColumn.Status)">
+                    Status
+                    @if (SortColumn == InstanceSortColumn.Status)
+                    {
+                        <i class="bi bi-@(SortAscending ? "arrow-up" : "arrow-down")"></i>
+                    }
+                </th>
+                <th class="sortable" @onclick="() => OnSort(InstanceSortColumn.CreatedTime)">
+                    Created Time (Local)
+                    @if (SortColumn == InstanceSortColumn.CreatedTime)
+                    {
+                        <i class="bi bi-@(SortAscending ? "arrow-up" : "arrow-down")"></i>
+                    }
+                </th>
+                <th class="sortable" @onclick="() => OnSort(InstanceSortColumn.LastUpdatedTime)">
+                    Last Updated (Local)
+                    @if (SortColumn == InstanceSortColumn.LastUpdatedTime)
+                    {
+                        <i class="bi bi-@(SortAscending ? "arrow-up" : "arrow-down")"></i>
+                    }
+                </th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var instance in SortedInstances)
+            {
+                <tr>
+                    <td title="@instance.InstanceId">
+                        @instance.InstanceId
+                    </td>
+                    <td title="@instance.Name">
+                        @instance.Name
+                    </td>
+                    <td>
+                        <span class="badge @GetStatusBadgeClass(instance.RuntimeStatus)">
+                            @instance.RuntimeStatus
+                        </span>
+                    </td>
+                    <td class="text-nowrap">@FormatDateTime(instance.CreatedTime)</td>
+                    <td class="text-nowrap">@FormatDateTime(instance.LastUpdatedTime)</td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => OnShowDetails.InvokeAsync(instance)"
+                                    title="View details in popup">
+                                <span class="bi bi-eye"></span> Details
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    @onclick="() => OpenInstanceInNewTab(instance.InstanceId)"
+                                    title="Open in new tab">
+                                <span class="bi bi-box-arrow-up-right"></span>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<style>
+    .table-responsive {
+        background-color: white;
+    }
+
+    .result-container {
+        max-height: calc(100vh - 400px);
+        min-height: 150px;
+        overflow: auto;
+        background-color: white;
+    }
+
+        .result-container table {
+            font-size: var(--font-size-base);
+            table-layout: auto;
+            white-space: nowrap;
+        }
+
+            .result-container table th {
+                font-size: var(--font-size-base);
+                padding: 0.5rem 0.75rem;
+                white-space: nowrap;
+            }
+
+            .result-container table td {
+                font-size: var(--font-size-base);
+                padding: 0.5rem 0.75rem;
+            }
+
+    .sticky-top {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .sortable {
+        cursor: pointer;
+        user-select: none;
+    }
+
+        .sortable:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+    @@media (max-width: 991.98px) {
+        .result-container {
+            max-height: 400px;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public List<InstanceInfo> Instances { get; set; } = new();
+    [Parameter] public EventCallback<InstanceInfo> OnShowDetails { get; set; }
+    [Parameter] public int TimezoneOffsetMinutes { get; set; }
+
+    private InstanceSortColumn SortColumn { get; set; } = InstanceSortColumn.CreatedTime;
+    private bool SortAscending { get; set; } = true;
+    private List<InstanceInfo> SortedInstances { get; set; } = new();
+
+    public enum InstanceSortColumn
+    {
+        Status,
+        CreatedTime,
+        LastUpdatedTime
+    }
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+        ApplySort();
+    }
+
+    private void OnSort(InstanceSortColumn column)
+    {
+        if (SortColumn == column)
+        {
+            SortAscending = !SortAscending;
+        }
+        else
+        {
+            SortColumn = column;
+            SortAscending = true;
+        }
+
+        ApplySort();
+    }
+
+    private void ApplySort()
+    {
+        if (Instances == null || !Instances.Any())
+        {
+            SortedInstances = new List<InstanceInfo>();
+            return;
+        }
+
+        IEnumerable<InstanceInfo> sorted = SortColumn switch
+        {
+            InstanceSortColumn.Status => SortAscending
+                ? Instances.OrderBy(i => i.RuntimeStatus ?? string.Empty)
+                : Instances.OrderByDescending(i => i.RuntimeStatus ?? string.Empty),
+            InstanceSortColumn.CreatedTime => SortAscending
+                ? Instances.OrderBy(i => ParseDateTime(i.CreatedTime) ?? DateTime.MaxValue)
+                : Instances.OrderByDescending(i => ParseDateTime(i.CreatedTime) ?? DateTime.MinValue),
+            InstanceSortColumn.LastUpdatedTime => SortAscending
+                ? Instances.OrderBy(i => ParseDateTime(i.LastUpdatedTime) ?? DateTime.MaxValue)
+                : Instances.OrderByDescending(i => ParseDateTime(i.LastUpdatedTime) ?? DateTime.MinValue),
+            _ => Instances
+        };
+
+        SortedInstances = sorted.ToList();
+    }
+
+    private DateTime? ParseDateTime(string? dateTime)
+    {
+        if (string.IsNullOrEmpty(dateTime))
+        {
+            return null;
+        }
+
+        if (DateTime.TryParse(dateTime, out var dt))
+        {
+            return dt;
+        }
+
+        return null;
+    }
+
+    private string GetStatusBadgeClass(string status) => status?.ToLower() switch
+    {
+        var s when s == RuntimeStatus.Running.ToLower() || s == RuntimeStatus.Pending.ToLower() => "bg-primary",
+        var s when s == RuntimeStatus.Completed.ToLower() => "bg-success",
+        var s when s == RuntimeStatus.Failed.ToLower() => "bg-danger",
+        var s when s == RuntimeStatus.Terminated.ToLower() => "bg-warning",
+        var s when s == RuntimeStatus.Canceled.ToLower() => "bg-secondary",
+        _ => "bg-secondary"
+    };
+
+    private string FormatDateTime(string? dateTime)
+    {
+        if (string.IsNullOrEmpty(dateTime))
+        {
+            return "N/A";
+        }
+
+        DateTime localDateTime = TimeZoneService.ConvertUtcToLocal(dateTime.ToString(), TimezoneOffsetMinutes);
+
+        return localDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private async Task OpenInstanceInNewTab(string? instanceId)
+    {
+        if (string.IsNullOrWhiteSpace(instanceId))
+        {
+            return;
+        }
+
+        var url = $"/instances/{Uri.EscapeDataString(instanceId)}?showHistoryOutput=true&returnInternalServerErrorOnFailure=true&needsReload=true";
+        await JSRuntime.InvokeVoidAsync("window.open", url, "_blank");
+    }
+}
