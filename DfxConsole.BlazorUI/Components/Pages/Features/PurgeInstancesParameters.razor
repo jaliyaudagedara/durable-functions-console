@@ -1,14 +1,20 @@
 @using DfxConsole.BlazorUI.Constants
 @using DfxConsole.BlazorUI.Models
+@using DfxConsole.BlazorUI.Components.Shared
 
 <div class="row">
     <div class="col-md-6 mb-3">
-        <label class="form-label">Created Time From (Local)<span class="text-danger">*</span></label>
-        <input type="datetime-local" class="form-control" @bind="_createdTimeFrom" />
+        <DateTimePicker Label="Created Time From (Local)"
+                        Value="@_createdTimeFrom"
+                        ValueChanged="@((DateTime? value) => _createdTimeFrom = value)"
+                        Required="true"
+                        Placeholder="Select start date and time..." />
     </div>
     <div class="col-md-6 mb-3">
-        <label class="form-label">Created Time To (Local)</label>
-        <input type="datetime-local" class="form-control" @bind="_createdTimeTo" />
+        <DateTimePicker Label="Created Time To (Local)"
+                        Value="@_createdTimeTo"
+                        ValueChanged="@((DateTime? value) => _createdTimeTo = value)"
+                        Placeholder="Select end date and time..." />
     </div>
 </div>
 <div class="row">
